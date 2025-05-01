@@ -4,218 +4,303 @@ Course Code: ICS3U-01
 Author: Sean Nie
 Description: This program is a basic flight tracker that allows users to input flight information, including departure and arrival airports, flight number, and date.
 History:
-2025-04-29      Version 1 (display table of flight information)
-2025-04-29      Version 2 (added GUI for displaying flight data using PyQt6)
+2025-04-29      Version 1 (fetches flight data from OpenSky Network API)
+2025-05-01      Version 2 (added GUI using PySide6)
+
 """
-# ----- Imports -----
 import sys
 import requests
-import json
 import pandas as pd
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                            QHBoxLayout, QPushButton, QLabel, QTableView, 
-                            QHeaderView, QFrame, QMessageBox)
-from PyQt6.QtCore import Qt, QTimer, QAbstractTableModel
-from PyQt6.QtGui import QFont, QColor
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableView, QHeaderView, QFrame
+from PySide6.QtCore import Qt, QTimer, QAbstractTableModel
 from datetime import datetime
-import time
 
 # ----- Constants -----
-LONGMIN, LATMIN = -180, -90
-LONGMAX, LATMAX = 180, 90
-BG_COLOR = "#f0f0f0"
-HEADER_COLOR = "#4a7abc"
-BUTTON_COLOR = "#3a5795"
-REFRESH_TIME = 60000  # Refresh every 60 seconds
+# Ottawa coordinates with 100 NM radius
+MIN_LAT, MAX_LAT = 43.6665, 47.1765
+MIN_LON, MAX_LON = -79.1972, -72.1972
+REFRESH_TIME = 60000  # milliseconds
 
-class PandasModel(QAbstractTableModel):
-    """Model for pandas DataFrame to be displayed in QTableView"""
+# ----- Colours -----
+BG_COLOR = "#263238"  # Dark blue-gray
+HEADER_COLOR = "#37474F"  # Darker blue-gray 
+TEXT_COLOR = "#ECEFF1"  # Light gray
+
+class FlightDataModel(QAbstractTableModel):
+    """
+    Model for displaying flight data in a table view.
+
+    Attributes:
+        _data (DataFrame): pandas DataFrame containing flight information
+    """
     def __init__(self, data):
+        """
+        Initializes the flight data model
+        Args:
+            data (DataFrame): pandas DataFrame to display
+        """
         super().__init__()
         self._data = data
 
     def rowCount(self, parent=None):
+        """
+        Returns the number of rows in the data
+        Args:
+            parent (QModelIndex): parent index
+        Returns:
+            (int): number of rows
+        """
         return self._data.shape[0]
 
     def columnCount(self, parent=None):
+        """
+        Returns the number of columns in the data
+        Args:
+            parent (QModelIndex): parent index
+        Returns:
+            (int): number of columns
+        """
         return self._data.shape[1]
 
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
-        if index.isValid():
-            if role == Qt.ItemDataRole.DisplayRole:
-                return str(self._data.iloc[index.row(), index.column()])
-            if role == Qt.ItemDataRole.TextAlignmentRole:
-                return Qt.AlignmentFlag.AlignCenter
+    def data(self, index, role=Qt.DisplayRole):
+        """
+        Provides data to display in each cell
+        Args:
+            index (QModelIndex): cell index
+            role (Qt.ItemDataRole): data role
+        Returns:
+            (str or None): cell data or None if invalid
+        """
+        if not index.isValid():  # C6: Selection structure
+            return None
+            
+        if role == Qt.DisplayRole:  # C5: Comparison operator
+            return str(self._data.iloc[index.row(), index.column()])
+        elif role == Qt.TextAlignmentRole:
+            return Qt.AlignCenter
+            
         return None
 
     def headerData(self, section, orientation, role):
-        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
+        """
+        Provides header data for rows and columns
+        Args:
+            section (int): section index
+            orientation (Qt.Orientation): header orientation
+            role (Qt.ItemDataRole): data role
+        Returns:
+            (str or None): header text or None if invalid
+        """
+        if role != Qt.DisplayRole:  # C5: Comparison operator
+            return None
+            
+        if orientation == Qt.Horizontal:  # C6: Selection structure
+            # Format column headers with proper capitalization
             return str(self._data.columns[section]).replace('_', ' ').title()
-        if orientation == Qt.Orientation.Vertical and role == Qt.ItemDataRole.DisplayRole:
-            return str(section + 1)
-        return None
+            
+        return str(section + 1)  # Row numbers
 
 class FlightScopeApp(QMainWindow):
+    """
+    Main application for displaying flight data near Ottawa.
+
+    Attributes:
+        userName (str): OpenSky Network API username
+        password (str): OpenSky Network API password
+        tableView (QTableView): table widget for displaying flight data
+        countLabel (QLabel): label showing number of flights
+        updateLabel (QLabel): label showing last update time
+        timer (QTimer): timer for auto-refresh functionality
+    """
     def __init__(self):
+        """Initializes the application"""
         super().__init__()
-        self.setWindowTitle("✈️ FlightScope - Flight Tracking System")
+        self.setWindowTitle("✈️ FlightScope - Ottawa (100 NM)")
         self.setGeometry(100, 100, 1200, 700)
-        self.setStyleSheet(f"background-color: {BG_COLOR};")
+        self.setStyleSheet(f"background-color: {BG_COLOR}; color: {TEXT_COLOR};")
         
-        self.username = ''  # Replace with your actual username
-        self.password = ''  # Replace with your actual password
+        # API credentials (C1: variables)
+        self.userName = ''  # OpenSky username
+        self.password = ''  # OpenSky password
         
-        self.setup_ui()
-        self.setup_timer()
-        self.fetch_flight_data()
-    
-    def setup_ui(self):
-        # Main central widget
-        central_widget = QWidget()
-        main_layout = QVBoxLayout(central_widget)
+        # Set up UI components
+        self.setupUi()
         
-        # Header
-        header_frame = QFrame()
-        header_frame.setStyleSheet(f"background-color: {HEADER_COLOR}; border-radius: 5px;")
-        header_layout = QVBoxLayout(header_frame)
-        
-        title_label = QLabel("FlightScope - Flight Tracking System")
-        title_label.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        title_label.setStyleSheet("color: white;")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        header_layout.addWidget(title_label)
-        
-        main_layout.addWidget(header_frame)
-        
-        # Controls
-        control_frame = QFrame()
-        control_layout = QHBoxLayout(control_frame)
-        
-        self.refresh_button = QPushButton("Refresh Data")
-        self.refresh_button.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: white; padding: 8px; font-size: 12px; border-radius: 4px;")
-        self.refresh_button.clicked.connect(self.fetch_flight_data)
-        control_layout.addWidget(self.refresh_button)
-        
-        self.status_label = QLabel("Ready")
-        self.status_label.setFont(QFont("Arial", 12))
-        control_layout.addStretch()
-        control_layout.addWidget(self.status_label)
-        
-        main_layout.addWidget(control_frame)
-        
-        # Table view
-        self.table_view = QTableView()
-        self.table_view.setStyleSheet("QTableView { border: 1px solid #d0d0d0; alternate-background-color: #e9e9e9; }"
-                                     "QHeaderView::section { background-color: #dcdcdc; padding: 4px; }")
-        self.table_view.setAlternatingRowColors(True)
-        self.table_view.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table_view.verticalHeader().setVisible(True)
-        self.table_view.setSortingEnabled(True)
-        
-        main_layout.addWidget(self.table_view)
-        
-        # Status bar
-        status_frame = QFrame()
-        status_frame.setStyleSheet(f"background-color: {HEADER_COLOR}; border-radius: 5px;")
-        status_layout = QHBoxLayout(status_frame)
-        
-        self.flights_count_label = QLabel("Total flights: 0")
-        self.flights_count_label.setStyleSheet("color: white;")
-        self.flights_count_label.setFont(QFont("Arial", 12))
-        status_layout.addWidget(self.flights_count_label)
-        
-        status_layout.addStretch()
-        
-        self.last_update_label = QLabel("Last updated: Never")
-        self.last_update_label.setStyleSheet("color: white;")
-        self.last_update_label.setFont(QFont("Arial", 12))
-        status_layout.addWidget(self.last_update_label)
-        
-        main_layout.addWidget(status_frame)
-        
-        # Set central widget
-        self.setCentralWidget(central_widget)
-        
-    def setup_timer(self):
-        # Create timer for auto-refresh
+        # Set up auto-refresh timer (C8: Repetition)
         self.timer = QTimer(self)
-        self.timer.setInterval(REFRESH_TIME)  # 60 seconds
-        self.timer.timeout.connect(self.fetch_flight_data)
+        self.timer.setInterval(REFRESH_TIME)
+        self.timer.timeout.connect(self.fetchFlightData)
         self.timer.start()
+        
+        # Initial data load
+        self.fetchFlightData()
     
-    def fetch_flight_data(self):
-        self.status_label.setText("Fetching data...")
-        QApplication.processEvents()
+    def setupUi(self):
+        """Sets up the user interface components"""
+        # Main widget and layout (C9: Nested structures)
+        centralWidget = QWidget()
+        mainLayout = QVBoxLayout(centralWidget)
         
-        urlData = f'https://{self.username}:{self.password}@opensky-network.org/api/states/all?' + \
-            f'lamin={LATMIN}&lomin={LONGMIN}&lamax={LATMAX}&lomax={LONGMAX}'
+        # Create header
+        headerFrame = self.createHeader()
+        mainLayout.addWidget(headerFrame)
         
+        # Create controls
+        controlFrame = self.createControls()
+        mainLayout.addWidget(controlFrame)
+        
+        # Create table view
+        self.tableView = self.createTableView()
+        mainLayout.addWidget(self.tableView)
+        
+        self.setCentralWidget(centralWidget)
+    
+    def createHeader(self):
+        """
+        Creates the application header
+        Returns:
+            (QFrame): header frame widget
+        """
+        headerFrame = QFrame()
+        headerFrame.setStyleSheet(f"background-color: {HEADER_COLOR};")
+        headerLayout = QHBoxLayout(headerFrame)
+        
+        titleLabel = QLabel("FlightScope - Ottawa (100 NM)")
+        titleLabel.setStyleSheet(f"color: {TEXT_COLOR}; font-size: 16pt; font-weight: bold;")
+        headerLayout.addWidget(titleLabel)
+        
+        return headerFrame
+    
+    def createControls(self):
+        """
+        Creates the control panel with refresh button and status indicators
+        Returns:
+            (QFrame): control frame widget
+        """
+        controlFrame = QFrame()
+        controlLayout = QHBoxLayout(controlFrame)
+        
+        # Refresh button
+        refreshButton = QPushButton("Refresh Data")
+        refreshButton.setStyleSheet("background-color: #546E7A; color: white; padding: 8px;")
+        refreshButton.clicked.connect(self.fetchFlightData)
+        controlLayout.addWidget(refreshButton)
+        
+        controlLayout.addStretch()
+        
+        # Status labels
+        self.countLabel = QLabel("Flights: 0")
+        self.countLabel.setStyleSheet(f"color: {TEXT_COLOR};")
+        controlLayout.addWidget(self.countLabel)
+        
+        self.updateLabel = QLabel("Last Updated: Never")
+        self.updateLabel.setStyleSheet(f"color: {TEXT_COLOR};")
+        controlLayout.addWidget(self.updateLabel)
+        
+        return controlFrame
+    
+    def createTableView(self):
+        """
+        Creates and configures the table view for flight data
+        Returns:
+            (QTableView): configured table view widget
+        """
+        tableView = QTableView()
+        tableView.setStyleSheet(
+            "QTableView { background-color: #455A64; gridline-color: #78909C; color: white; }"
+            "QTableView::item { border-color: #78909C; padding: 5px; }"
+            "QHeaderView::section { background-color: #37474F; color: white; padding: 5px; }"
+            "QTableView::item:alternate { background-color: #546E7A; }"
+        )
+        tableView.setAlternatingRowColors(True)
+        tableView.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        return tableView
+    
+    def formatTimestamp(self, timestamp):
+        """
+        Converts UNIX timestamp to human-readable format
+        Args:
+            timestamp (float): UNIX timestamp to format
+        Returns:
+            (str): formatted datetime string or 'No Data' if invalid
+        """
         try:
+            if pd.isna(timestamp) or timestamp == 'No Data':
+                return 'No Data'
+            # C2: Arithmetic operation (implicit conversion)
+            return datetime.fromtimestamp(float(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            return 'No Data'
+    
+    def fetchFlightData(self):
+        """Fetches and displays flight data from OpenSky Network API"""
+        # Construct API URL (C3: Processing input)
+        urlData = (
+            f'https://{self.userName}:{self.password}@opensky-network.org/api/states/all?'
+            f'lamin={MIN_LAT}&lomin={MIN_LON}&lamax={MAX_LAT}&lomax={MAX_LON}'
+        )
+        
+        try:  # H4: Exception handling
+            # Make API request
             response = requests.get(urlData)
-            if response.status_code == 200:
-                response_data = response.json()
+            
+            if response.status_code == 200:  # C5: Comparison operator
+                data = response.json()
                 
-                if 'states' in response_data and response_data['states']:
-                    # Create DataFrame
-                    columns = ['icao24', 'callsign', 'origin_country', 'time_position', 'last_contact',
-                            'long', 'lat', 'baro_altitude', 'on_ground', 'velocity', 
-                            'true_track', 'vertical_rate', 'sensors', 'geo_altitude', 
-                            'squawk', 'spi', 'position_source']
+                # C7: Boolean operators (AND)
+                if 'states' in data and data['states']:
+                    # Define column names (C10: List initialization)
+                    columns = [
+                        'ICAO24', 'Callsign', 'Origin', 'TimePos',
+                        'LastContact', 'Long', 'Lat', 'Alt',
+                        'OnGround', 'Speed', 'Heading', 'VertRate',
+                        'Sensors', 'GeoAlt', 'Squawk', 'SPI', 'Source'
+                    ]
                     
-                    flightDf = pd.DataFrame(response_data['states'])
+                    # Create DataFrame (C11: Using external libraries)
+                    flightDf = pd.DataFrame(data['states'])
                     flightDf = flightDf.iloc[:, 0:17]  # First 17 columns
                     flightDf.columns = columns
                     flightDf = flightDf.fillna('No Data')
                     
-                    # Format timestamp columns
-                    if 'time_position' in flightDf.columns:
-                        flightDf['time_position'] = pd.to_numeric(flightDf['time_position'], errors='coerce')
-                        flightDf['time_position'] = flightDf['time_position'].apply(
-                            lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M:%S') if pd.notna(x) and x != 'No Data' else 'No Data'
-                        )
+                    # Format timestamps (C8: Repetition through iteration)
+                    for col in ['TimePos', 'LastContact']:
+                        if col in flightDf.columns:
+                            flightDf[col] = pd.to_numeric(flightDf[col], errors='coerce')
+                            flightDf[col] = flightDf[col].apply(self.formatTimestamp)
                     
-                    if 'last_contact' in flightDf.columns:
-                        flightDf['last_contact'] = pd.to_numeric(flightDf['last_contact'], errors='coerce')
-                        flightDf['last_contact'] = flightDf['last_contact'].apply(
-                            lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M:%S') if pd.notna(x) and x != 'No Data' else 'No Data'
-                        )
+                    # Format boolean column
+                    flightDf['OnGround'] = flightDf['OnGround'].apply(lambda x: 'Yes' if x else 'No')
                     
-                    # Save to CSV
+                    # Save to CSV (P3: File maintenance)
                     flightDf.to_csv('FlightScope.csv', index=False)
                     
-                    # Update table model
-                    model = PandasModel(flightDf)
-                    self.table_view.setModel(model)
+                    # Update table (C3: Screen output)
+                    model = FlightDataModel(flightDf)
+                    self.tableView.setModel(model)
                     
-                    # Update status information
-                    total_flights = len(flightDf)
-                    self.flights_count_label.setText(f"Total flights detected: {total_flights}")
-                    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    self.last_update_label.setText(f"Last updated: {current_time}")
-                    self.status_label.setText("Data loaded successfully")
+                    # Update status
+                    self.countLabel.setText(f"Flights: {len(flightDf)}")
+                    # C2: String concatenation
+                    self.updateLabel.setText(f"Updated: {datetime.now().strftime('%H:%M:%S')}")
                 else:
-                    self.status_label.setText("No flight data available")
-                    if 'states' not in response_data:
-                        QMessageBox.information(
-                            self, 
-                            "API Response", 
-                            f"'states' key not found in the response.\nKeys: {response_data.keys()}"
-                        )
+                    # No flights found
+                    self.countLabel.setText("Flights: 0")
+                    self.updateLabel.setText(f"Updated: {datetime.now().strftime('%H:%M:%S')}")
             else:
-                self.status_label.setText(f"Error: API request failed (Code {response.status_code})")
-                QMessageBox.critical(
-                    self, 
-                    "API Error", 
-                    f"Status code: {response.status_code}\nResponse: {response.text}"
-                )
+                # Request failed
+                self.countLabel.setText("Flights: --")
+                self.updateLabel.setText("Update failed")
         except Exception as e:
-            self.status_label.setText(f"Error occurred")
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            # H4: Exception handling
+            self.countLabel.setText("Error")
+            self.updateLabel.setText("Connection error")
 
-# ----- Main Program -----
+# Main program entry point (P1: Project structure)
 if __name__ == "__main__":
+    # Create the application
     app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # Use Fusion style for a modern look
     window = FlightScopeApp()
     window.show()
     sys.exit(app.exec())

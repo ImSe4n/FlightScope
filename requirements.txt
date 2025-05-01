@@ -1,3 +1,6 @@
-PyQt6==6.6.0
+PySide6==6.6.0
 pandas==2.1.4
 requests==2.31.0
+folium==0.15.0
+geopy==2.4.1
+pyqtwebengine==5.15.6
