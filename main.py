@@ -20,6 +20,7 @@ from datetime import datetime
 MIN_LAT, MAX_LAT = 43.6665, 47.1765
 MIN_LON, MAX_LON = -79.1972, -72.1972
 REFRESH_TIME = 60000  # milliseconds
+# TODO: make refresh time configurable later
 
 # ----- Colours -----
 BG_COLOR = "#263238"  # Dark blue-gray
@@ -43,25 +44,12 @@ class FlightDataModel(QAbstractTableModel):
         """
         super().__init__()
         self._data = data
+        # self.sortColumn = 0  # not implemented yet
 
     def rowCount(self, parent=None):
-        """
-        Returns the number of rows in the data
-        Args:
-            parent (QModelIndex): parent index
-        Returns:
-            (int): number of rows
-        """
         return self._data.shape[0]
 
     def columnCount(self, parent=None):
-        """
-        Returns the number of columns in the data
-        Args:
-            parent (QModelIndex): parent index
-        Returns:
-            (int): number of columns
-        """
         return self._data.shape[1]
 
     def data(self, index, role=Qt.DisplayRole):
@@ -84,23 +72,14 @@ class FlightDataModel(QAbstractTableModel):
         return None
 
     def headerData(self, section, orientation, role):
-        """
-        Provides header data for rows and columns
-        Args:
-            section (int): section index
-            orientation (Qt.Orientation): header orientation
-            role (Qt.ItemDataRole): data role
-        Returns:
-            (str or None): header text or None if invalid
-        """
-        if role != Qt.DisplayRole:  # C5: Comparison operator
+        if role != Qt.DisplayRole:
             return None
 
-        if orientation == Qt.Horizontal:  # C6: Selection structure
-            # Format column headers with proper capitalization
+        if orientation == Qt.Horizontal:
+            # Let's make these column names look nice
             return str(self._data.columns[section]).replace('_', ' ').title()
 
-        return str(section + 1)  # Row numbers
+        return str(section + 1)  # Row numbers start at 1
 
 
 class FlightScopeApp(QMainWindow):
@@ -127,6 +106,7 @@ class FlightScopeApp(QMainWindow):
         # API credentials (C1: variables)
         self.userName = ''  # OpenSky username
         self.password = ''  # OpenSky password
+        # self.debug_mode = False  # might add this later
 
         # Set up UI components
         self.setupUi()
@@ -141,13 +121,12 @@ class FlightScopeApp(QMainWindow):
         self.fetchFlightData()
 
     def setupUi(self):
-        """Sets up the user interface components"""
         # Main widget and layout (C9: Nested structures)
         centralWidget = QWidget()
         mainLayout = QVBoxLayout(centralWidget)
 
         # Create header
-        headerFrame = self.createHeader()
+        headerFrame = self.buildHeaderBar()
         mainLayout.addWidget(headerFrame)
 
         # Create controls
@@ -160,7 +139,7 @@ class FlightScopeApp(QMainWindow):
 
         self.setCentralWidget(centralWidget)
 
-    def createHeader(self):
+    def buildHeaderBar(self):
         """
         Creates the application header
         Returns:
@@ -178,11 +157,6 @@ class FlightScopeApp(QMainWindow):
         return headerFrame
 
     def createControls(self):
-        """
-        Creates the control panel with refresh button and status indicators
-        Returns:
-            (QFrame): control frame widget
-        """
         controlFrame = QFrame()
         controlLayout = QHBoxLayout(controlFrame)
 
@@ -207,12 +181,8 @@ class FlightScopeApp(QMainWindow):
         return controlFrame
 
     def createTableView(self):
-        """
-        Creates and configures the table view for flight data
-        Returns:
-            (QTableView): configured table view widget
-        """
         tableView = QTableView()
+        # Making the table look decent with alternating row colors
         tableView.setStyleSheet(
             "QTableView { background-color: #455A64; gridline-color: #78909C; color: white; }"
             "QTableView::item { border-color: #78909C; padding: 5px; }"
@@ -225,19 +195,13 @@ class FlightScopeApp(QMainWindow):
         return tableView
 
     def formatTimestamp(self, timestamp):
-        """
-        Converts UNIX timestamp to human-readable format
-        Args:
-            timestamp (float): UNIX timestamp to format
-        Returns:
-            (str): formatted datetime string or 'No Data' if invalid
-        """
         try:
             if pd.isna(timestamp) or timestamp == 'No Data':
                 return 'No Data'
             # C2: Arithmetic operation (implicit conversion)
             return datetime.fromtimestamp(float(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
         except:
+            # this is a bit lazy but it works
             return 'No Data'
 
     def fetchFlightData(self):
@@ -251,6 +215,7 @@ class FlightScopeApp(QMainWindow):
         try:  # H4: Exception handling
             # Make API request
             response = requests.get(urlData)
+            # print(f"DEBUG: Got response code {response.status_code}")
 
             if response.status_code == 200:  # C5: Comparison operator
                 data = response.json()
@@ -270,6 +235,8 @@ class FlightScopeApp(QMainWindow):
                     flightDf = flightDf.iloc[:, 0:17]  # First 17 columns
                     flightDf.columns = columns
                     flightDf = flightDf.fillna('No Data')
+                    
+                    # print(f"DEBUG: Flight count = {len(flightDf)}")
 
                     # Format timestamps (C8: Repetition through iteration)
                     for col in ['TimePos', 'LastContact']:
@@ -286,6 +253,7 @@ class FlightScopeApp(QMainWindow):
 
                     # Save to CSV (P3: File maintenance)
                     flightDf.to_csv('FlightScope.csv', index=False)
+                    # Note: might need to optimize this if file gets too big
 
                     # Update table (C3: Screen output)
                     model = FlightDataModel(flightDf)
@@ -293,20 +261,18 @@ class FlightScopeApp(QMainWindow):
 
                     # Update status
                     self.countLabel.setText(f"Flights: {len(flightDf)}")
-                    # C2: String concatenation
-                    self.updateLabel.setText(
-                        f"Updated: {datetime.now().strftime('%H:%M:%S')}")
+                    self.updateLabel.setText(f"Updated: {datetime.now().strftime('%H:%M:%S')}")
                 else:
                     # No flights found
                     self.countLabel.setText("Flights: 0")
-                    self.updateLabel.setText(
-                        f"Updated: {datetime.now().strftime('%H:%M:%S')}")
+                    self.updateLabel.setText(f"Updated: {datetime.now().strftime('%H:%M:%S')}")
             else:
                 # Request failed
                 self.countLabel.setText("Flights: --")
                 self.updateLabel.setText("Update failed")
         except Exception as e:
             # H4: Exception handling
+            # print(f"Error: {str(e)}")  # removing this for now
             self.countLabel.setText("Error")
             self.updateLabel.setText("Connection error")
 
@@ -318,4 +284,6 @@ if __name__ == "__main__":
     window = FlightScopeApp()
     window.show()
     print("I'm burning hot")
+    print("Hope this thing doesn't crash 🤞")
+    # temp_var = "meant to delete this"
     sys.exit(app.exec())
