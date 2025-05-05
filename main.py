@@ -5,7 +5,7 @@ Author: Sean Nie
 Description: This program is a basic flight tracker that allows users to input flight information, including departure and arrival airports, flight number, and date.
 History:
 2025-04-29      Version 1 (fetches flight data from OpenSky Network API)
-2025-05-01      Version 2 (added GUI using PySide6)
+2025-05-05      Version 2 (added GUI using PySide6)
 
 """
 import sys
@@ -23,8 +23,9 @@ REFRESH_TIME = 60000  # milliseconds
 
 # ----- Colours -----
 BG_COLOR = "#263238"  # Dark blue-gray
-HEADER_COLOR = "#37474F"  # Darker blue-gray 
+HEADER_COLOR = "#37474F"  # Darker blue-gray
 TEXT_COLOR = "#ECEFF1"  # Light gray
+
 
 class FlightDataModel(QAbstractTableModel):
     """
@@ -33,6 +34,7 @@ class FlightDataModel(QAbstractTableModel):
     Attributes:
         _data (DataFrame): pandas DataFrame containing flight information
     """
+
     def __init__(self, data):
         """
         Initializes the flight data model
@@ -73,12 +75,12 @@ class FlightDataModel(QAbstractTableModel):
         """
         if not index.isValid():  # C6: Selection structure
             return None
-            
+
         if role == Qt.DisplayRole:  # C5: Comparison operator
             return str(self._data.iloc[index.row(), index.column()])
         elif role == Qt.TextAlignmentRole:
             return Qt.AlignCenter
-            
+
         return None
 
     def headerData(self, section, orientation, role):
@@ -93,12 +95,13 @@ class FlightDataModel(QAbstractTableModel):
         """
         if role != Qt.DisplayRole:  # C5: Comparison operator
             return None
-            
+
         if orientation == Qt.Horizontal:  # C6: Selection structure
             # Format column headers with proper capitalization
             return str(self._data.columns[section]).replace('_', ' ').title()
-            
+
         return str(section + 1)  # Row numbers
+
 
 class FlightScopeApp(QMainWindow):
     """
@@ -112,49 +115,51 @@ class FlightScopeApp(QMainWindow):
         updateLabel (QLabel): label showing last update time
         timer (QTimer): timer for auto-refresh functionality
     """
+
     def __init__(self):
         """Initializes the application"""
         super().__init__()
-        self.setWindowTitle("✈️ FlightScope - Ottawa (100 NM)")
+        self.setWindowTitle("FlightScope")
         self.setGeometry(100, 100, 1200, 700)
-        self.setStyleSheet(f"background-color: {BG_COLOR}; color: {TEXT_COLOR};")
-        
+        self.setStyleSheet(
+            f"background-color: {BG_COLOR}; color: {TEXT_COLOR};")
+
         # API credentials (C1: variables)
         self.userName = ''  # OpenSky username
         self.password = ''  # OpenSky password
-        
+
         # Set up UI components
         self.setupUi()
-        
+
         # Set up auto-refresh timer (C8: Repetition)
         self.timer = QTimer(self)
         self.timer.setInterval(REFRESH_TIME)
         self.timer.timeout.connect(self.fetchFlightData)
         self.timer.start()
-        
+
         # Initial data load
         self.fetchFlightData()
-    
+
     def setupUi(self):
         """Sets up the user interface components"""
         # Main widget and layout (C9: Nested structures)
         centralWidget = QWidget()
         mainLayout = QVBoxLayout(centralWidget)
-        
+
         # Create header
         headerFrame = self.createHeader()
         mainLayout.addWidget(headerFrame)
-        
+
         # Create controls
         controlFrame = self.createControls()
         mainLayout.addWidget(controlFrame)
-        
+
         # Create table view
         self.tableView = self.createTableView()
         mainLayout.addWidget(self.tableView)
-        
+
         self.setCentralWidget(centralWidget)
-    
+
     def createHeader(self):
         """
         Creates the application header
@@ -164,13 +169,14 @@ class FlightScopeApp(QMainWindow):
         headerFrame = QFrame()
         headerFrame.setStyleSheet(f"background-color: {HEADER_COLOR};")
         headerLayout = QHBoxLayout(headerFrame)
-        
-        titleLabel = QLabel("FlightScope - Ottawa (100 NM)")
-        titleLabel.setStyleSheet(f"color: {TEXT_COLOR}; font-size: 16pt; font-weight: bold;")
+
+        titleLabel = QLabel("FlightScope")
+        titleLabel.setStyleSheet(
+            f"color: {TEXT_COLOR}; font-size: 16pt; font-weight: bold;")
         headerLayout.addWidget(titleLabel)
-        
+
         return headerFrame
-    
+
     def createControls(self):
         """
         Creates the control panel with refresh button and status indicators
@@ -179,26 +185,27 @@ class FlightScopeApp(QMainWindow):
         """
         controlFrame = QFrame()
         controlLayout = QHBoxLayout(controlFrame)
-        
+
         # Refresh button
         refreshButton = QPushButton("Refresh Data")
-        refreshButton.setStyleSheet("background-color: #546E7A; color: white; padding: 8px;")
+        refreshButton.setStyleSheet(
+            "background-color: #546E7A; color: white; padding: 8px;")
         refreshButton.clicked.connect(self.fetchFlightData)
         controlLayout.addWidget(refreshButton)
-        
+
         controlLayout.addStretch()
-        
+
         # Status labels
         self.countLabel = QLabel("Flights: 0")
         self.countLabel.setStyleSheet(f"color: {TEXT_COLOR};")
         controlLayout.addWidget(self.countLabel)
-        
+
         self.updateLabel = QLabel("Last Updated: Never")
         self.updateLabel.setStyleSheet(f"color: {TEXT_COLOR};")
         controlLayout.addWidget(self.updateLabel)
-        
+
         return controlFrame
-    
+
     def createTableView(self):
         """
         Creates and configures the table view for flight data
@@ -214,9 +221,9 @@ class FlightScopeApp(QMainWindow):
         )
         tableView.setAlternatingRowColors(True)
         tableView.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        
+
         return tableView
-    
+
     def formatTimestamp(self, timestamp):
         """
         Converts UNIX timestamp to human-readable format
@@ -232,7 +239,7 @@ class FlightScopeApp(QMainWindow):
             return datetime.fromtimestamp(float(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
         except:
             return 'No Data'
-    
+
     def fetchFlightData(self):
         """Fetches and displays flight data from OpenSky Network API"""
         # Construct API URL (C3: Processing input)
@@ -240,14 +247,14 @@ class FlightScopeApp(QMainWindow):
             f'https://{self.userName}:{self.password}@opensky-network.org/api/states/all?'
             f'lamin={MIN_LAT}&lomin={MIN_LON}&lamax={MAX_LAT}&lomax={MAX_LON}'
         )
-        
+
         try:  # H4: Exception handling
             # Make API request
             response = requests.get(urlData)
-            
+
             if response.status_code == 200:  # C5: Comparison operator
                 data = response.json()
-                
+
                 # C7: Boolean operators (AND)
                 if 'states' in data and data['states']:
                     # Define column names (C10: List initialization)
@@ -257,37 +264,43 @@ class FlightScopeApp(QMainWindow):
                         'OnGround', 'Speed', 'Heading', 'VertRate',
                         'Sensors', 'GeoAlt', 'Squawk', 'SPI', 'Source'
                     ]
-                    
+
                     # Create DataFrame (C11: Using external libraries)
                     flightDf = pd.DataFrame(data['states'])
                     flightDf = flightDf.iloc[:, 0:17]  # First 17 columns
                     flightDf.columns = columns
                     flightDf = flightDf.fillna('No Data')
-                    
+
                     # Format timestamps (C8: Repetition through iteration)
                     for col in ['TimePos', 'LastContact']:
                         if col in flightDf.columns:
-                            flightDf[col] = pd.to_numeric(flightDf[col], errors='coerce')
-                            flightDf[col] = flightDf[col].apply(self.formatTimestamp)
-                    
+                            flightDf[col] = pd.to_numeric(
+                                flightDf[col], errors='coerce')
+                            flightDf[col] = flightDf[col].apply(
+                                self.formatTimestamp)
+
                     # Format boolean column
-                    flightDf['OnGround'] = flightDf['OnGround'].apply(lambda x: 'Yes' if x else 'No')
-                    
+                    # Convert boolean to string with lambda function
+                    flightDf['OnGround'] = flightDf['OnGround'].apply(
+                        lambda x: 'Yes' if x else 'No')
+
                     # Save to CSV (P3: File maintenance)
                     flightDf.to_csv('FlightScope.csv', index=False)
-                    
+
                     # Update table (C3: Screen output)
                     model = FlightDataModel(flightDf)
                     self.tableView.setModel(model)
-                    
+
                     # Update status
                     self.countLabel.setText(f"Flights: {len(flightDf)}")
                     # C2: String concatenation
-                    self.updateLabel.setText(f"Updated: {datetime.now().strftime('%H:%M:%S')}")
+                    self.updateLabel.setText(
+                        f"Updated: {datetime.now().strftime('%H:%M:%S')}")
                 else:
                     # No flights found
                     self.countLabel.setText("Flights: 0")
-                    self.updateLabel.setText(f"Updated: {datetime.now().strftime('%H:%M:%S')}")
+                    self.updateLabel.setText(
+                        f"Updated: {datetime.now().strftime('%H:%M:%S')}")
             else:
                 # Request failed
                 self.countLabel.setText("Flights: --")
@@ -297,10 +310,12 @@ class FlightScopeApp(QMainWindow):
             self.countLabel.setText("Error")
             self.updateLabel.setText("Connection error")
 
+
 # Main program entry point (P1: Project structure)
 if __name__ == "__main__":
     # Create the application
     app = QApplication(sys.argv)
     window = FlightScopeApp()
     window.show()
+    print("I'm burning hot")
     sys.exit(app.exec())
