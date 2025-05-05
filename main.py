@@ -284,6 +284,6 @@ if __name__ == "__main__":
     window = FlightScopeApp()
     window.show()
     print("I'm burning hot")
-    print("Hope this thing doesn't crash 🤞")
+    print("Hope this thing doesn't crash fr")
     # temp_var = "meant to delete this"
     sys.exit(app.exec())
