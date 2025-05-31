@@ -53,4 +53,4 @@ python main.py
 - **v5.0 (2025-05-30):** Code refactor, documentation, modular design
 
 ## Author
-Sean Nie – ICS3U-01
+Sean Nie
