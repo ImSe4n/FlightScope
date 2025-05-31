@@ -7,7 +7,8 @@ History:
 2025-04-29      Version 1 (fetches flight data from OpenSky Network API)
 2025-05-05      Version 2 (added GUI using PySide6)
 2025-05-10      Version 3 (plot aircraft on map using Folium)
-2025-05-26
+2025-05-26      Version 4 (added airport data from airportdb.io API, weather from Open-Meteo API, and METAR from NOAA)
+2025-05-30      Version 5 (finalize code, added comments, cleaned up code)
 """
 import sys
 import os
@@ -16,9 +17,9 @@ import requests
 import pandas as pd
 import folium
 import io
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                               QPushButton, QLabel, QFrame)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,QPushButton, QLabel, QFrame)
 from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtCore import Qt, QTimer
 from datetime import datetime
 
 # ----- Constants -----
@@ -34,20 +35,20 @@ MAP_HEIGHT = 700   # Height of the map view in pixels
 AIRCRAFT_SIZE = 20  # Size of aircraft icon in pixels
 
 # ----- Colours -----
-BG_COLOR = "#263238"  # Dark blue-gray
-HEADER_COLOR = "#37474F"  # Darker blue-gray
-TEXT_COLOR = "#ECEFF1"  # Light gray
-AIRCRAFT_COLOR = "#2196F3"  # Blue color for aircraft
-GRID_COLOR = "#37474F"  # Grid line color
-LAND_COLOR = "#455A64"    # Land color
-WATER_COLOR = "#1A237E"   # Water color
-BORDER_COLOR = "#78909C"  # Border lines color
-TRACK_COLOR = "#4FC3F7"   # Aircraft track color
+BG_COLOR = "#263238"
+HEADER_COLOR = "#37474F"
+TEXT_COLOR = "#ECEFF1"
+AIRCRAFT_COLOR = "#2196F3"
+GRID_COLOR = "#37474F"
+LAND_COLOR = "#455A64"
+WATER_COLOR = "#1A237E"
+BORDER_COLOR = "#78909C"
+TRACK_COLOR = "#4FC3F7"
 
-
+# ----- Class -----
 class FlightScopeApp(QMainWindow):
     """
-    Represents the main application for displaying flight data near Ottawa.
+    Main application for displaying flight data near Ottawa.
 
     Attributes:
         userName (str): OpenSky Network API username
@@ -57,13 +58,9 @@ class FlightScopeApp(QMainWindow):
         updateLabel (QLabel): label showing last update time
     """
 
+    # ----- Functions -----
     def __init__(self):
-        """
-        Initializes instance attributes.
-
-        Args:
-            None
-        """
+        """Initializes the application"""
         super().__init__()
         self.setWindowTitle("FlightScope")
         self.setGeometry(100, 100, 1200, 700)
@@ -74,6 +71,24 @@ class FlightScopeApp(QMainWindow):
         self.userName = ''  # OpenSky username
         self.password = ''  # OpenSky password
 
+        # Config parameters
+        self.minLat = MIN_LAT
+        self.maxLat = MAX_LAT
+        self.minLon = MIN_LON
+        self.maxLon = MAX_LON
+        self.centerLat = CENTER_LAT
+        self.centerLon = CENTER_LON
+
+        # AirportDB and weather/METAR API settings
+        self.airportApiToken = '89e420818cba11453f8c0d69dd06e6a075288321eb34723d17fadf678cde51f575dd81b6245e01cf77f26831dd973895'
+        self.airports = {
+            'CYOW': {'lat': 45.3225, 'lon': -75.6692},
+            'CYND': {'lat': 45.5210, 'lon': -75.5630},
+            'CYRO': {'lat': 45.4592, 'lon': -75.6522}
+        }
+        self.mapTiles = 'cartodbpositron' # Folium tile layer
+        self.zoomStart = 7
+
         # Set up UI components
         self.setupUi()
 
@@ -81,12 +96,6 @@ class FlightScopeApp(QMainWindow):
         self.fetchFlightData()
 
     def setupUi(self):
-        """
-        Sets up the UI components.
-
-        Args:
-            None
-        """
         # Main widget and layout
         centralWidget = QWidget()
         mainLayout = QVBoxLayout(centralWidget)
@@ -99,7 +108,7 @@ class FlightScopeApp(QMainWindow):
         controlFrame = self.createControls()
         mainLayout.addWidget(controlFrame)
 
-        # Create map view using QWebEngineView (to display the HTML content, may be removed later if the planes move dynamically)
+        # Create map view using QWebEngineView (to display the HTML content, may be removed later if the planes move dynamically - couldnt get this to work in the timeframe :()
         self.mapView = QWebEngineView()
         mainLayout.addWidget(self.mapView)
 
@@ -107,10 +116,9 @@ class FlightScopeApp(QMainWindow):
 
     def buildHeaderBar(self):
         """
-        Creates the application header.
-
+        Creates the application header
         Returns:
-            QFrame: header frame widget
+            (QFrame): header frame widget
         """
         headerFrame = QFrame()
         headerFrame.setStyleSheet(f"background-color: {HEADER_COLOR};")
@@ -125,10 +133,9 @@ class FlightScopeApp(QMainWindow):
 
     def createControls(self):
         """
-        Creates the control panel with buttons and status labels.
-
+        Creates the control panel with buttons and status labels
         Returns:
-            QFrame: control frame widget
+            controlFrame: control frame widget
         """
         controlFrame = QFrame()
         controlLayout = QHBoxLayout(controlFrame)
@@ -140,7 +147,7 @@ class FlightScopeApp(QMainWindow):
         refreshButton.clicked.connect(self.fetchFlightData)
         controlLayout.addWidget(refreshButton)
 
-        controlLayout.addStretch()
+        controlLayout.addStretch() # Add stretch to push controls to the left
 
         # Status labels
         self.countLabel = QLabel("Flights: 0")
@@ -153,6 +160,89 @@ class FlightScopeApp(QMainWindow):
 
         return controlFrame
 
+    def getAirportData(self, airports=None, apiToken=None):
+        """Fetch airport info (coordinates, runways, weather, METAR) and return list of data dicts"""
+        apiToken = apiToken or self.airportApiToken
+        airports = airports or self.airports
+        airportList = [] # list to store airport data dictionaries
+        
+        # Default airports with coordinates
+        for ident, default in airports.items(): # iterating through the airports dictionary
+            # Fetch airport data from API
+            lat, lon = default['lat'], default['lon']
+            resp = requests.get(f'https://airportdb.io/api/v1/airport/{ident}?apiToken={apiToken}')
+            data = {'ident': ident, 'name': ident, 'lat': lat, 'lon': lon} # default data structure
+            # If the API request was successful, update data with the response
+            if resp.status_code == 200:
+                ad = resp.json() # get the JSON response from the API
+                data.update({
+                    'name': ad.get('name', ident),
+                    'lat': ad.get('latitude', lat),
+                    'lon': ad.get('longitude', lon),
+                    'runways': ad.get('runways', [])
+                })
+            # weather
+            wresp = requests.get(f"https://api.open-meteo.com/v1/forecast?latitude={data['lat']}&longitude={data['lon']}&current_weather=true")
+            # check if the weather API request was successful
+            if wresp.ok:
+                cw = wresp.json().get('current_weather', {}) # get current weather data
+                data['weather'] = f"{cw.get('temperature','?')}°C, wind {cw.get('windspeed','?')} m/s" # format weather data from the API response, cpi.get comes from the current weather data dictionary
+            # METAR
+            mresp = requests.get(f"https://tgftp.nws.noaa.gov/data/observations/metar/stations/{ident}.TXT") # get METAR data from NOAA
+            # check if the METAR API request was successful
+            if mresp.ok:
+                lines = mresp.text.splitlines() # split the response text into lines
+                # if there are multiple lines, take the second line as the METAR report
+                # otherwise, set METAR to 'N/A', this is because the first line is usually a header, second line is the actual METAR report
+                if len(lines) > 1:
+                    data['metar'] = lines[1]
+                else:
+                    data['metar'] = 'N/A'
+            data['atis'] = 'N/A' #
+            airportList.append(data) # # append the airport data to the list
+        # Return list of airport data dictionaries
+        return airportList
+
+    def fetchAirportData(self, airports=None, apiToken=None):
+        """Plot airport markers on the map"""
+        # Plot each airport entry from structured data
+        for ad in self.getAirportData(airports, apiToken): # get airport data from API, run through each airport in the list
+            # Format runway HTML
+            # Build runway descriptions
+            runwayDescriptions = [] # list to store runway descriptions
+            # Check if runways exist in the airport data
+            for rw in ad.get('runways', []): # go through each runway in the airport data
+                # get runway details, if not available, use '?'
+                le = rw.get('le_ident', '?')
+                he = rw.get('he_ident', '?')
+                length = rw.get('length_ft', '?')
+                width = rw.get('width_ft', '?')
+                surface = rw.get('surface', '?')
+                desc = f"{le}/{he} - {length}ft x {width}ft ({surface})"
+                runwayDescriptions.append(desc)
+
+            # if runwayDescriptions is not empty, join them with <br> for HTML formatting otherwise, set formattedRunways to 'No runway data'
+            if runwayDescriptions:
+                formattedRunways = "<br>".join(runwayDescriptions)
+            else:
+                formattedRunways = "No runway data"
+            # Create popup content with airport details
+            popup = f"""
+            <div style='font-family:Arial;font-size:12px;'>
+                <b>Airport:</b> {ad['name']}<br>
+                <b>Runways:</b><br>{formattedRunways}<br>
+                <b>Weather:</b> {ad.get('weather','N/A')}<br>
+                <b>ATIS:</b> {ad.get('atis','N/A')}<br>
+                <b>METAR:</b> {ad.get('metar','N/A')}<br>
+            </div>
+            """
+            # Add marker to the map
+            folium.Marker(
+                location=[ad['lat'], ad['lon']],
+                popup=folium.Popup(popup, max_width=300),
+                icon=folium.Icon(color='red', icon='info-sign')
+            ).add_to(self.map)
+
     def fetchFlightData(self):
         """
         Fetches and displays flight data from OpenSky Network API.
@@ -160,19 +250,19 @@ class FlightScopeApp(QMainWindow):
         Args:
             None
         """
-        # Construct API URL
+        # Construct API URL using instance configuration
         urlData = (
             f'https://{self.userName}:{self.password}@opensky-network.org/api/states/all?'
-            f'lamin={MIN_LAT}&lomin={MIN_LON}&lamax={MAX_LAT}&lomax={MAX_LON}'
+            f'lamin={self.minLat}&lomin={self.minLon}&lamax={self.maxLat}&lomax={self.maxLon}'
         )
-
-        # Make API request
+        # Fetch flight data from OpenSky Network API
         response = requests.get(urlData)
-
+        # Check if the request was successful
         if response.status_code == 200:
             data = response.json()
 
-            if 'states' in data and data['states']:
+            if 'states' in data and data['states']: # Check if there are any flights
+                # Process flight data
                 # Define column names
                 columns = [
                     'ICAO24', 'Callsign', 'Origin', 'TimePos',
@@ -183,7 +273,7 @@ class FlightScopeApp(QMainWindow):
 
                 # Create DataFrame
                 flightDf = pd.DataFrame(data['states'])
-                flightDf = flightDf.iloc[:, 0:17]  # First 17 columns
+                flightDf = flightDf.iloc[:, 0:17]  # First 17 columns, .iloc is used to select rows and columns by index
                 flightDf.columns = columns
                 flightDf = flightDf.fillna('No Data')
 
@@ -192,11 +282,19 @@ class FlightScopeApp(QMainWindow):
                     flightDf['Long'] != 'No Data')]
 
                 # Generate map
-                m = folium.Map(location=[
-                               (MIN_LAT+MAX_LAT)/2, (MIN_LON+MAX_LON)/2], zoom_start=7, tiles='cartodbpositron')
+                # Initialize map with instance-configured parameters
+                self.map = folium.Map(
+                    location=[self.centerLat, self.centerLon],
+                    zoom_start=self.zoomStart,
+                    tiles=self.mapTiles
+                )
+
+                # Add airport markers (explicitly pass configuration)
+                self.fetchAirportData(airports=self.airports, apiToken=self.airportApiToken)
+
                 # Add a marker for each flight in the DataFrame
-                for _, row in flightDf.iterrows():  # go through each row
-                    # Get the latitude and longitude
+                for _, row in flightDf.iterrows():  # go through each row in the DataFrame
+                    # Skip if lat/lon are not valid
                     lat = float(row['Lat'])
                     lon = float(row['Long'])
                     icao = row['ICAO24']
@@ -204,7 +302,7 @@ class FlightScopeApp(QMainWindow):
                     altitude = row['Alt']
                     speed = row['Speed']
                     heading = row['Heading']
-                    vertical_rate = row['VertRate']
+                    verticalRate = row['VertRate']
                     squawk = row['Squawk']
 
                     # Create popup content
@@ -214,33 +312,21 @@ class FlightScopeApp(QMainWindow):
                     <b>Altitude:</b> {altitude} m<br>
                     <b>Speed:</b> {speed} m/s<br>
                     <b>Heading:</b> {heading}°<br>
-                    <b>Vertical Rate:</b> {vertical_rate} m/s<br>
+                    <b>Vertical Rate:</b> {verticalRate} m/s<br>
                     <b>Squawk:</b> {squawk}<br>
                     """
-
-                    # Add aircraft marker with popup
+                    # Add marker to the map
                     folium.Marker(
                         location=[lat, lon],
                         popup=folium.Popup(popupContent, max_width=300),
                         icon=folium.Icon(
                             color='blue', icon='plane', prefix='fa')
-                    ).add_to(m)
-                    # Fetch and draw historical path
-                    tracksUrl = (
-                        f'https://{self.userName}:{self.password}@opensky-network.org'
-                        f'/api/tracks/all?icao24={icao}&time={int(row["LastContact"])}'
-                    )
-                    trResp = requests.get(tracksUrl)
-                    if trResp.status_code == 200:
-                        trData = trResp.json()
-                        if 'path' in trData and trData['path']:
-                            coords = [[pt[1], pt[0]] for pt in trData['path']]
-                            folium.PolyLine(coords, color='green',
-                                            weight=2, opacity=0.7).add_to(m)
-                # save map to HTML - see reference tracker for chatgpt code reference
-                # according to chatgpt, this is a better way to save the map instead of saving it to a file
+                    ).add_to(self.map)
+
+                # Save map to HTML
+                #according to chatgpt, this is a better way to save the map rather than saving it to a file as utilizing BytesIO allows us to keep it in memory rather than writing to disk - check reference tracker
                 data = io.BytesIO()
-                m.save(data, close_file=False)
+                self.map.save(data, close_file=False)
                 self.mapView.setHtml(data.getvalue().decode())
 
                 # Update status
@@ -257,15 +343,29 @@ class FlightScopeApp(QMainWindow):
             self.countLabel.setText("Flights: --")
             self.updateLabel.setText("Update failed")
 
+    # def validateCoordinates(self, lat, lon):
+    #     """Validate latitude and longitude values"""
+    #     # Ensure lat/lon are valid floats within range, else return None
+    #     try:
+    #         lat_val = float(lat)
+    #         lon_val = float(lon)
+    #         if -90 <= lat_val <= 90 and -180 <= lon_val <= 180:
+    #             return lat_val, lon_val
+    #         else:
+    #             raise ValueError("Coordinates out of range")
+    #     except (ValueError, TypeError):
+    #         return None, None
+
+    # def exportFlightData(self):
+    #     """Export current flight data to CSV"""
+    #     # Check if flight data exists
+    #     if hasattr(self, 'flightDf'): # ensure flightDf is defined
+    #         filename = f"flights_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    #         self.flightDf.to_csv(filename, index=False)
+    #         # Could show success message
 
 # Main program entry point
 if __name__ == "__main__":
-    """
-    Entry point for the application.
-
-    Args:
-        None
-    """
     # Create the application
     app = QApplication(sys.argv)
     window = FlightScopeApp()
