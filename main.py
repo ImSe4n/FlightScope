@@ -96,6 +96,7 @@ class FlightScopeApp(QMainWindow):
         self.fetchFlightData()
 
     def setupUi(self):
+        """Sets up the user interface components"""
         # Main widget and layout
         centralWidget = QWidget()
         mainLayout = QVBoxLayout(centralWidget)
@@ -135,7 +136,7 @@ class FlightScopeApp(QMainWindow):
         """
         Creates the control panel with buttons and status labels
         Returns:
-            controlFrame: control frame widget
+            (QFrame): control frame widget containing buttons and labels
         """
         controlFrame = QFrame()
         controlLayout = QHBoxLayout(controlFrame)
@@ -161,7 +162,14 @@ class FlightScopeApp(QMainWindow):
         return controlFrame
 
     def getAirportData(self, airports=None, apiToken=None):
-        """Fetch airport info (coordinates, runways, weather, METAR) and return list of data dicts"""
+        """
+        Fetch airport info (coordinates, runways, weather, METAR) and return list of data dicts
+        Args:
+            airports (dict): Dictionary of airport identifiers and their coordinates
+            apiToken (str): API token for airportdb.io API
+        Returns:
+            (list): List of dictionaries containing airport data
+        """
         apiToken = apiToken or self.airportApiToken
         airports = airports or self.airports
         airportList = [] # list to store airport data dictionaries
@@ -204,7 +212,14 @@ class FlightScopeApp(QMainWindow):
         return airportList
 
     def fetchAirportData(self, airports=None, apiToken=None):
-        """Plot airport markers on the map"""
+        """
+        Plot airport markers on the map
+        Args:
+            airports (dict): Dictionary of airport identifiers and their coordinates
+            apiToken (str): API token for airportdb.io API
+        Returns:
+            None
+        """
         # Plot each airport entry from structured data
         for ad in self.getAirportData(airports, apiToken): # get airport data from API, run through each airport in the list
             # Format runway HTML
@@ -244,12 +259,7 @@ class FlightScopeApp(QMainWindow):
             ).add_to(self.map)
 
     def fetchFlightData(self):
-        """
-        Fetches and displays flight data from OpenSky Network API.
-
-        Args:
-            None
-        """
+        """Fetches and displays flight data from OpenSky Network API."""
         # Construct API URL using instance configuration
         urlData = (
             f'https://{self.userName}:{self.password}@opensky-network.org/api/states/all?'
@@ -344,13 +354,20 @@ class FlightScopeApp(QMainWindow):
             self.updateLabel.setText("Update failed")
 
     # def validateCoordinates(self, lat, lon):
-    #     """Validate latitude and longitude values"""
+    #    """
+    #    Validate latitude and longitude values
+    #    Args:
+    #        lat (str): Latitude value
+    #        lon (str): Longitude value
+    #    Returns:
+    #        (tuple): Validated latitude and longitude as floats, or (None, None) if invalid
+    #    """
     #     # Ensure lat/lon are valid floats within range, else return None
     #     try:
-    #         lat_val = float(lat)
-    #         lon_val = float(lon)
-    #         if -90 <= lat_val <= 90 and -180 <= lon_val <= 180:
-    #             return lat_val, lon_val
+    #         latVal = float(lat)
+    #         lonVal = float(lon)
+    #         if -90 <= latVal <= 90 and -180 <= lonVal <= 180:
+    #             return latVal, lonVal
     #         else:
     #             raise ValueError("Coordinates out of range")
     #     except (ValueError, TypeError):
