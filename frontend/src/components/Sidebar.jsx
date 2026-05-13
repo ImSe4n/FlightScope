@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import EmergencyBanner from './EmergencyBanner'
 import FilterPanel     from './FilterPanel'
 import FlightList      from './FlightList'
@@ -9,34 +10,58 @@ export default function Sidebar({
   filters, onFilterChange, onClearFilters, hasFilters,
   countries, emergencies,
 }) {
+  const [tab, setTab] = useState('flights')
+
   return (
     <aside className="sidebar">
 
-      {/* Emergency alert — shown above everything else when active */}
+      {/* Emergency alert strip */}
       <EmergencyBanner emergencies={emergencies} onSelect={onSelect} />
 
-      {/* Filters */}
-      <FilterPanel
-        filters={filters}
-        onChange={onFilterChange}
-        onClear={onClearFilters}
-        hasFilters={hasFilters}
-        countries={countries}
-      />
-
-      {/* Flight detail OR flight list */}
-      <div className="sb-main">
-        {selected ? (
+      {/* Detail view replaces the whole content area when a flight is selected */}
+      {selected ? (
+        <div className="sb-main">
           <FlightDetail flight={selected} onClose={onDeselect} />
-        ) : (
-          <FlightList
-            flights={flights}
-            total={totalFlights}
-            selected={selected}
-            onSelect={onSelect}
-          />
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          {/* Tab bar */}
+          <div className="sb-tabs">
+            <button
+              className={`sb-tab${tab === 'flights' ? ' sb-tab--active' : ''}`}
+              onClick={() => setTab('flights')}
+            >
+              ✈ Flights
+            </button>
+            <button
+              className={`sb-tab${tab === 'filters' ? ' sb-tab--active' : ''}`}
+              onClick={() => setTab('filters')}
+            >
+              ⚙ Filters
+              {hasFilters && <span className="sb-tab-dot" />}
+            </button>
+          </div>
+
+          <div className="sb-main">
+            {tab === 'flights' ? (
+              <FlightList
+                flights={flights}
+                total={totalFlights}
+                selected={selected}
+                onSelect={onSelect}
+              />
+            ) : (
+              <FilterPanel
+                filters={filters}
+                onChange={onFilterChange}
+                onClear={onClearFilters}
+                hasFilters={hasFilters}
+                countries={countries}
+              />
+            )}
+          </div>
+        </>
+      )}
 
     </aside>
   )

@@ -1,4 +1,27 @@
-import { TILE_LAYERS } from '../utils/constants'
+import { useState, useEffect } from 'react'
+import { TILE_LAYERS, REFRESH_MS } from '../utils/constants'
+
+// Isolated countdown — re-renders every second without touching App state
+function Countdown({ updatedAt, loading }) {
+  const total = REFRESH_MS / 1000
+  const [secs, setSecs] = useState(total)
+
+  // Reset whenever a fresh batch of data arrives
+  useEffect(() => { setSecs(total) }, [updatedAt, total])
+
+  useEffect(() => {
+    const id = setInterval(() => setSecs(s => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  if (loading) return <span className="countdown loading">updating…</span>
+  return (
+    <span className="countdown" title="Seconds until next auto-refresh">
+      <span className="countdown-bar" style={{ width: `${(secs / total) * 100}%` }} />
+      {secs}s
+    </span>
+  )
+}
 
 export default function Header({
   query, onQueryChange,
@@ -7,42 +30,53 @@ export default function Header({
 }) {
   return (
     <header className="header">
+
+      {/* Brand */}
       <div className="header-brand">
         <span className="header-logo">✈</span>
         <span className="header-title">
-          Flight<span className="header-title-accent">Scope</span>
+          Flight<span className="header-title-hl">Scope</span>
+        </span>
+        <span className="header-live">
+          <span className="live-dot" />
+          LIVE
         </span>
       </div>
 
       <div className="header-sep" />
 
+      {/* Search */}
       <div className="search-wrap">
         <span className="search-icon">⌕</span>
         <input
           className="search-input"
-          placeholder="Search callsign, ICAO24, country, squawk…"
+          placeholder="Callsign · ICAO24 · Country · Squawk…"
           value={query}
           onChange={e => onQueryChange(e.target.value)}
         />
         {query && (
-          <button className="search-clear" onClick={() => onQueryChange('')} title="Clear">✕</button>
+          <button className="search-clear" onClick={() => onQueryChange('')}>✕</button>
         )}
       </div>
 
+      {/* Stats + controls */}
       <div className="header-right">
         {error ? (
           <span className="badge-err" title={error}>⚠ API Error</span>
         ) : (
           <>
-            <StatChip value={stats.total}       label="flights"   color="#38bdf8" />
-            <StatChip value={stats.inAir}       label="airborne"  color="#4ade80" />
-            <StatChip value={stats.countries}   label="countries" color="#fbbf24" />
+            <StatChip value={stats.total}       label="Flights"   color="#38bdf8" />
+            <StatChip value={stats.inAir}       label="Airborne"  color="#4ade80" />
+            <StatChip value={stats.countries}   label="Countries" color="#fbbf24" />
             {stats.emergencies > 0 && (
               <StatChip value={stats.emergencies} label="SOS" color="#f87171" blink />
             )}
           </>
         )}
 
+        <div className="header-sep" />
+
+        {/* Map layer buttons */}
         <div className="layer-switcher">
           {Object.entries(TILE_LAYERS).map(([key, layer]) => (
             <button
@@ -55,8 +89,11 @@ export default function Header({
           ))}
         </div>
 
-        <span className="updated">{loading ? '↻ updating…' : updatedAt ? `↺ ${updatedAt}` : ''}</span>
-        <button className="btn-refresh" onClick={onRefresh} disabled={loading}>Refresh</button>
+        <Countdown updatedAt={updatedAt} loading={loading} />
+
+        <button className="btn-refresh" onClick={onRefresh} disabled={loading}>
+          ↻ Refresh
+        </button>
       </div>
     </header>
   )
