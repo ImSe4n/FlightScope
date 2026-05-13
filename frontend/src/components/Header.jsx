@@ -1,37 +1,44 @@
 import { useState, useEffect } from 'react'
-import { TILE_LAYERS, REFRESH_MS } from '../utils/constants'
+import { TILE_LAYERS } from '../utils/constants'
 
-// Isolated countdown — re-renders every second without touching App state
-function Countdown({ updatedAt, loading }) {
-  const total = REFRESH_MS / 1000
-  const [secs, setSecs] = useState(total)
+// Debounced search — displays immediately in the input, but only propagates to the
+// parent after 200 ms of inactivity, avoiding a full 8 000-flight filter on every keystroke.
+function SearchBox({ query, onQueryChange }) {
+  const [local, setLocal] = useState(query)
 
-  // Reset whenever a fresh batch of data arrives
-  useEffect(() => { setSecs(total) }, [updatedAt, total])
+  // Sync if parent clears the query (e.g. "Clear all filters")
+  useEffect(() => { setLocal(query) }, [query])
 
+  // Debounce: propagate 200 ms after the user stops typing
   useEffect(() => {
-    const id = setInterval(() => setSecs(s => Math.max(0, s - 1)), 1000)
-    return () => clearInterval(id)
-  }, [])
+    const id = setTimeout(() => { if (local !== query) onQueryChange(local) }, 200)
+    return () => clearTimeout(id)
+  }, [local])  // intentionally omits query/onQueryChange — only fires on local change
 
-  if (loading) return <span className="countdown loading">updating…</span>
   return (
-    <span className="countdown" title="Seconds until next auto-refresh">
-      <span className="countdown-bar" style={{ width: `${(secs / total) * 100}%` }} />
-      {secs}s
-    </span>
+    <div className="search-wrap">
+      <span className="search-icon">⌕</span>
+      <input
+        className="search-input"
+        placeholder="Callsign · ICAO24 · Country · Squawk…"
+        value={local}
+        onChange={e => setLocal(e.target.value)}
+      />
+      {local && (
+        <button className="search-clear" onClick={() => { setLocal(''); onQueryChange('') }}>✕</button>
+      )}
+    </div>
   )
 }
 
 export default function Header({
   query, onQueryChange,
-  stats, loading, error, updatedAt,
-  onRefresh, mapLayer, onLayerChange,
+  stats, error,
+  mapLayer, onLayerChange,
 }) {
   return (
     <header className="header">
 
-      {/* Brand */}
       <div className="header-brand">
         <span className="header-logo">✈</span>
         <span className="header-title">
@@ -45,21 +52,8 @@ export default function Header({
 
       <div className="header-sep" />
 
-      {/* Search */}
-      <div className="search-wrap">
-        <span className="search-icon">⌕</span>
-        <input
-          className="search-input"
-          placeholder="Callsign · ICAO24 · Country · Squawk…"
-          value={query}
-          onChange={e => onQueryChange(e.target.value)}
-        />
-        {query && (
-          <button className="search-clear" onClick={() => onQueryChange('')}>✕</button>
-        )}
-      </div>
+      <SearchBox query={query} onQueryChange={onQueryChange} />
 
-      {/* Stats + controls */}
       <div className="header-right">
         {error ? (
           <span className="badge-err" title={error}>⚠ API Error</span>
@@ -76,7 +70,6 @@ export default function Header({
 
         <div className="header-sep" />
 
-        {/* Map layer buttons */}
         <div className="layer-switcher">
           {Object.entries(TILE_LAYERS).map(([key, layer]) => (
             <button
@@ -89,11 +82,6 @@ export default function Header({
           ))}
         </div>
 
-        <Countdown updatedAt={updatedAt} loading={loading} />
-
-        <button className="btn-refresh" onClick={onRefresh} disabled={loading}>
-          ↻ Refresh
-        </button>
       </div>
     </header>
   )

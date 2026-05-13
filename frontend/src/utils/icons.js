@@ -55,9 +55,13 @@ export function makeSelectedIcon(heading) {
 }
 
 export const AIRPORT_ICON = L.divIcon({
-  html: '<span class="airport-icon">🛬</span>',
+  html: `<svg width="12" height="17" viewBox="0 0 12 17" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6 0C2.69 0 0 2.69 0 6c0 4.25 6 11 6 11s6-6.75 6-11c0-3.31-2.69-6-6-6z"
+          fill="#fbbf24" stroke="rgba(0,0,0,0.35)" stroke-width="1"/>
+    <circle cx="6" cy="6" r="2.2" fill="rgba(0,0,0,0.22)"/>
+  </svg>`,
   className: '',
-  iconSize:   [24, 24],
-  iconAnchor: [12, 14],
-  popupAnchor:[0, -16],
+  iconSize:   [12, 17],
+  iconAnchor: [6, 17],
+  popupAnchor:[0, -19],
 })

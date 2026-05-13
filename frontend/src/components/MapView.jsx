@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState, useMemo, memo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet.markercluster'
@@ -27,16 +27,14 @@ function MapClickHandler({ onDeselect }) {
 
 // ── Flight path polyline ──────────────────────────────────────────────────────
 function TrackLayer({ track }) {
-  const map    = useMap()
+  const map     = useMap()
   const polyRef = useRef(null)
 
   useEffect(() => {
     if (polyRef.current) { map.removeLayer(polyRef.current); polyRef.current = null }
     if (!track || track.length < 2) return
-
     const pts = track.filter(p => p[1] != null && p[2] != null).map(p => [p[1], p[2]])
     if (pts.length < 2) return
-
     const poly = L.polyline(pts, { color: '#38bdf8', weight: 2, opacity: 0.7, dashArray: '6 5' })
     map.addLayer(poly)
     polyRef.current = poly
@@ -47,15 +45,6 @@ function TrackLayer({ track }) {
 }
 
 // ── Imperative flight layer ───────────────────────────────────────────────────
-// PERFORMANCE STRATEGY:
-//   • Viewport culling   — only manage markers inside getBounds().pad(1.0)
-//     At zoom-6 this cuts 8 000+ markers to ~200; at global zoom clustering
-//     handles the visual load anyway.
-//   • Batch cluster ops  — removeLayers(stale) + removeLayers(movers) + addLayers(new+movers)
-//     = 3 cluster recalculations per refresh instead of up to 8 000.
-//   • Icon cache         — heading-bucket (10°) × alt-bucket (5) = ≤180 objects total.
-//   • Ref-based sync     — flights stored in a ref so the sync callback is stable
-//     (no deps beyond `map`), preventing spurious effect re-runs.
 function FlightLayer({ flights, onSelect }) {
   const map        = useMap()
   const clusterRef = useRef(null)
@@ -65,7 +54,6 @@ function FlightLayer({ flights, onSelect }) {
   onSelRef.current   = onSelect
   flightsRef.current = flights
 
-  // Create cluster group once
   useEffect(() => {
     const cg = L.markerClusterGroup({
       chunkedLoading:          true,
@@ -79,44 +67,45 @@ function FlightLayer({ flights, onSelect }) {
     return () => { map.removeLayer(cg); clusterRef.current = null; markersRef.current.clear() }
   }, [map])
 
-  // Stable sync function — all mutable state accessed via refs
   const sync = useCallback(() => {
     const cg = clusterRef.current
     if (!cg) return
 
     const flist    = flightsRef.current
-    const bounds   = map.getBounds().pad(1.0) // generous buffer for smooth panning
     const existing = markersRef.current
 
-    // Build wanted set: only flights inside the padded viewport
+    // Viewport culling — fall back to "show all" if map isn't sized yet
+    let bounds = null
+    try { bounds = map.getBounds().pad(1.0) } catch { /* map not ready */ }
+
     const wanted = new Map()
     for (const f of flist) {
-      if (f.lat != null && f.lon != null && bounds.contains([f.lat, f.lon])) {
-        wanted.set(f.icao24, f)
+      if (f.lat != null && f.lon != null) {
+        if (!bounds || bounds.contains([f.lat, f.lon]))
+          wanted.set(f.icao24, f)
       }
     }
 
-    // 1. Remove stale / out-of-viewport markers
+    // 1. Remove stale / out-of-viewport
     const toRemove = []
     for (const [id, e] of existing) {
       if (!wanted.has(id)) { toRemove.push(e.marker); existing.delete(id) }
     }
     if (toRemove.length) cg.removeLayers(toRemove)
 
-    // 2. Identify movers — pull out of cluster for a cheap batch reposition
+    // 2. Find movers, pull them out of cluster for cheap reposition
     const movers   = []
     const moverSet = new Set()
     for (const [id, f] of wanted) {
       const e = existing.get(id)
       if (!e) continue
       if (Math.abs(f.lat - e.flight.lat) > 0.001 || Math.abs(f.lon - e.flight.lon) > 0.001) {
-        movers.push(e.marker)
-        moverSet.add(e.marker)
+        movers.push(e.marker); moverSet.add(e.marker)
       }
     }
     if (movers.length) cg.removeLayers(movers)
 
-    // 3. Update existing markers / create new ones
+    // 3. Update existing / create new
     const toAdd = []
     for (const [id, f] of wanted) {
       const isEmg = Boolean(EMERGENCY_SQUAWKS[String(f.squawk)])
@@ -125,11 +114,7 @@ function FlightLayer({ flights, onSelect }) {
       const e     = existing.get(id)
 
       if (e) {
-        if (moverSet.has(e.marker)) {
-          e.marker.setLatLng([f.lat, f.lon]) // safe — removed from cluster
-          toAdd.push(e.marker)
-        }
-        // Rebuild icon only when heading bucket, squawk, or alt tier changes
+        if (moverSet.has(e.marker)) { e.marker.setLatLng([f.lat, f.lon]); toAdd.push(e.marker) }
         if (newHb !== e.prevHb || String(f.squawk) !== e.prevSq || newAb !== e.prevAb) {
           e.marker.setIcon(isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt))
           e.prevHb = newHb; e.prevSq = String(f.squawk); e.prevAb = newAb
@@ -146,16 +131,62 @@ function FlightLayer({ flights, onSelect }) {
     }
 
     if (toAdd.length) cg.addLayers(toAdd)
-  }, [map]) // map is stable — callback never changes
+  }, [map])
 
-  // Sync when flight data refreshes
   useEffect(() => { sync() }, [flights, sync])
-
-  // Sync when the user pans or zooms (viewport culling needs updated bounds)
   useMapEvents({ moveend: sync, zoomend: sync })
 
   return null
 }
+
+// ── Airport layer — zoom-based tier filtering ─────────────────────────────────
+// tier 1 (~60 major global hubs): always shown
+// tier 2 (remaining large airports): shown only at zoom ≥ 4
+function AirportLayer({ airports }) {
+  const map = useMap()
+  const [zoom, setZoom] = useState(() => map.getZoom())
+  useMapEvents({ zoomend: () => setZoom(map.getZoom()) })
+
+  const visible = useMemo(
+    () => zoom <= 3 ? airports.filter(a => a.tier === 1) : airports,
+    [airports, zoom],
+  )
+
+  return <>{visible.map(a => <AirportMarker key={a.ident} a={a} />)}</>
+}
+
+// ── Airport marker with lazy-loaded enrichment ────────────────────────────────
+// Details (weather, image, runways, METAR) are only fetched the first time
+// the user clicks the marker — basic info shows immediately.
+const AirportMarker = memo(function AirportMarker({ a }) {
+  const [detail,  setDetail]  = useState(null)
+  const [loading, setLoading] = useState(false)
+  const triggered = useRef(false)
+
+  const handleClick = useCallback(() => {
+    if (triggered.current) return
+    triggered.current = true
+    setLoading(true)
+    fetch(`/api/airport/${a.ident}`)
+      .then(r => r.json())
+      .then(d => { setDetail(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [a.ident])
+
+  const merged = detail ? { ...a, ...detail } : a
+
+  return (
+    <Marker
+      position={[a.lat, a.lon]}
+      icon={AIRPORT_ICON}
+      eventHandlers={{ click: handleClick }}
+    >
+      <Popup maxWidth={340}>
+        <AirportPopup a={merged} loading={loading} />
+      </Popup>
+    </Marker>
+  )
+})
 
 // ── Geolocate button ──────────────────────────────────────────────────────────
 function GeolocateBtn() {
@@ -165,11 +196,7 @@ function GeolocateBtn() {
       map.flyTo([pos.coords.latitude, pos.coords.longitude], 8, { duration: 1.2 })
     })
   }
-  return (
-    <div className="map-ctrl-btn" title="Fly to my location" onClick={locate}>
-      ◎
-    </div>
-  )
+  return <div className="map-ctrl-btn" title="Fly to my location" onClick={locate}>◎</div>
 }
 
 // ── Map controls overlay ──────────────────────────────────────────────────────
@@ -184,17 +211,17 @@ function MapControls() {
   )
 }
 
-// ── Altitude legend overlay ───────────────────────────────────────────────────
+// ── Altitude legend ───────────────────────────────────────────────────────────
 function AltLegend() {
   return (
     <div className="alt-legend">
       <div className="alt-legend-title">ALT</div>
       {[
-        { color: '#f0f4f8', label: '>11 km' },
-        { color: '#a78bfa', label: '6–11 km' },
+        { color: '#f0f4f8', label: '>11 km'   },
+        { color: '#a78bfa', label: '6–11 km'  },
         { color: '#38bdf8', label: '1.5–6 km' },
-        { color: '#4ade80', label: '<1.5 km' },
-        { color: '#7c93af', label: 'Unknown' },
+        { color: '#4ade80', label: '<1.5 km'  },
+        { color: '#7c93af', label: 'Unknown'  },
       ].map(({ color, label }) => (
         <div key={label} className="alt-legend-row">
           <span className="alt-legend-dot" style={{ background: color }} />
@@ -230,7 +257,6 @@ export default function MapView({ flights, airports, selected, flyTarget, mapLay
         />
 
         <TrackLayer track={track} />
-
         <FlightLayer flights={flights} onSelect={onSelect} />
 
         {selected?.lat && selected?.lon && (
@@ -241,13 +267,7 @@ export default function MapView({ flights, airports, selected, flyTarget, mapLay
           />
         )}
 
-        {airports.map(a => (
-          <Marker key={a.ident} position={[a.lat, a.lon]} icon={AIRPORT_ICON}>
-            <Popup maxWidth={340}>
-              <AirportPopup a={a} />
-            </Popup>
-          </Marker>
-        ))}
+        <AirportLayer airports={airports} />
       </MapContainer>
 
       <AltLegend />

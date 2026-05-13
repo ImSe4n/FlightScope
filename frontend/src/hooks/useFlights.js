@@ -49,20 +49,63 @@ export function useAirports() {
 }
 
 export function useTrack(icao24) {
-  const [track, setTrack]   = useState(null)
-  const [trackLoading, setTrackLoading] = useState(false)
+  const [track, setTrack]           = useState(null)
+  const [trackLoading, setLoading]  = useState(false)
 
   useEffect(() => {
     if (!icao24) { setTrack(null); return }
-    setTrackLoading(true)
+    setLoading(true)
     fetch(`/api/track/${icao24}`)
       .then(r => r.json())
-      .then(data => {
-        setTrack(data.path ?? null) // [[time, lat, lon, baro_alt, heading, on_ground], ...]
-        setTrackLoading(false)
-      })
-      .catch(() => { setTrack(null); setTrackLoading(false) })
+      .then(data => { setTrack(data.path ?? null); setLoading(false) })
+      .catch(() => { setTrack(null); setLoading(false) })
   }, [icao24])
 
   return { track, trackLoading }
+}
+
+// Fetches aircraft registration / type / operator from hexdb.io (via backend proxy)
+export function useAircraftInfo(icao24) {
+  const [info, setInfo] = useState(null)
+
+  useEffect(() => {
+    if (!icao24) { setInfo(null); return }
+    fetch(`/api/aircraft/${icao24}`)
+      .then(r => r.json())
+      .then(d => setInfo(d && Object.keys(d).length > 0 ? d : null))
+      .catch(() => setInfo(null))
+  }, [icao24])
+
+  return info
+}
+
+// Fetches scheduled route (FROM → TO airports) from OpenSky callsign DB
+export function useRoute(callsign) {
+  const [route, setRoute] = useState(null)
+
+  useEffect(() => {
+    const cs = callsign?.trim()
+    if (!cs) { setRoute(null); return }
+    fetch(`/api/route/${cs}`)
+      .then(r => r.json())
+      .then(d => setRoute(d && d.route?.length >= 2 ? d : null))
+      .catch(() => setRoute(null))
+  }, [callsign])
+
+  return route
+}
+
+// Fetches actual departure/arrival info from the last 24 h of OpenSky flight records
+export function useFlightHistory(icao24) {
+  const [history, setHistory] = useState(null)
+
+  useEffect(() => {
+    if (!icao24) { setHistory(null); return }
+    fetch(`/api/flight-history/${icao24}`)
+      .then(r => r.json())
+      .then(d => setHistory(d?.latest ? d : null))
+      .catch(() => setHistory(null))
+  }, [icao24])
+
+  return history
 }

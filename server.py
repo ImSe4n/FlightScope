@@ -2,11 +2,18 @@
 Name: FlightScope Web
 Course Code: ICS3U-01
 Author: Sean Nie
-Description: FastAPI backend serving live flight and airport data via REST API.
+Description: FastAPI backend – live flights, global airports, aircraft & route data.
 """
+import io
 import math
 import os
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
+from urllib.parse import quote as urlquote
+from concurrent.futures import ThreadPoolExecutor
+
+from dotenv import load_dotenv
+load_dotenv()
 
 import pandas as pd
 import requests
@@ -16,7 +23,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="FlightScope API")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,138 +30,449 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----- Constants -----
-AIRPORTS = {
-    'CYOW': {'lat': 45.3225, 'lon': -75.6692},
-    'CYND': {'lat': 45.5210, 'lon': -75.5630},
-    'CYRO': {'lat': 45.4592, 'lon': -75.6522},
-}
-
-AIRPORT_API_TOKEN = '89e420818cba11453f8c0d69dd06e6a075288321eb34723d17fadf678cde51f575dd81b6245e01cf77f26831dd973895'
-
+# ── Constants ─────────────────────────────────────────────────────────────────
 FLIGHT_COLUMNS = [
     'icao24', 'callsign', 'origin', 'timePos', 'lastContact',
     'lon', 'lat', 'alt', 'onGround', 'speed', 'heading',
     'vertRate', 'sensors', 'geoAlt', 'squawk', 'spi', 'source',
 ]
 
+AIRPORT_API_TOKEN = '89e420818cba11453f8c0d69dd06e6a075288321eb34723d17fadf678cde51f575dd81b6245e01cf77f26831dd973895'
 
-# ----- Routes -----
-@app.get("/api/flights")
-def get_flights():
-    """Fetch all live aircraft states from OpenSky Network (global coverage)."""
-    url = "https://opensky-network.org/api/states/all"
+# Tier-1 airports shown at all zoom levels — the ~60 most recognisable global hubs
+TIER1_IATA = {
+    # North America
+    'JFK','LAX','ORD','ATL','DFW','DEN','SFO','MIA','SEA','BOS','EWR','YYZ','YVR','MEX',
+    # South America
+    'GRU','EZE','BOG','SCL','LIM','GIG',
+    # Europe
+    'LHR','CDG','FRA','AMS','MAD','FCO','IST','MUC','ZRH','VIE','BCN','BRU','CPH',
+    'HEL','ARN','LIS','ATH','WAW',
+    # Middle East
+    'DXB','DOH','AUH','RUH',
+    # Asia-Pacific
+    'SIN','HKG','NRT','HND','PEK','PVG','ICN','BKK','KUL','SYD','MEL','CGK',
+    # South Asia
+    'DEL','BOM','BLR',
+    # Africa
+    'JNB','CAI','NBO','ADD','CMN','LOS',
+}
+
+# ── OpenSky OAuth2 token manager ─────────────────────────────────────────────
+_OPENSKY_TOKEN_URL = (
+    "https://auth.opensky-network.org/auth/realms/opensky-network"
+    "/protocol/openid-connect/token"
+)
+
+class _TokenManager:
+    def __init__(self):
+        self.token      = None
+        self.expires_at = None
+
+    def get_token(self):
+        if self.token and self.expires_at and datetime.now() < self.expires_at:
+            return self.token
+        return self._refresh()
+
+    def _refresh(self):
+        cid  = os.getenv("OPENSKY_CLIENT_ID")
+        csec = os.getenv("OPENSKY_CLIENT_SECRET")
+        if not cid or not csec:
+            return None
+        try:
+            r = requests.post(_OPENSKY_TOKEN_URL, data={
+                "grant_type":    "client_credentials",
+                "client_id":     cid,
+                "client_secret": csec,
+            }, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            self.token      = data["access_token"]
+            expires_in      = data.get("expires_in", 1800)
+            self.expires_at = datetime.now() + timedelta(seconds=expires_in - 30)
+            print(f"[opensky] token refreshed, expires in {expires_in}s")
+            return self.token
+        except Exception as exc:
+            print(f"[opensky] token refresh failed: {exc}")
+            self.token = None
+            return None
+
+    def headers(self):
+        tok = self.get_token()
+        return {"Authorization": f"Bearer {tok}"} if tok else {}
+
+_opensky_tokens = _TokenManager()
+
+# ── Airport CSV cache (OurAirports — free, global) ────────────────────────────
+_airports_df    = None
+_airports_df_ts = 0.0
+AIRPORTS_CSV    = "https://davidmegginson.github.io/ourairports-data/airports.csv"
+AIRPORTS_TTL    = 86_400   # re-fetch once per day
+
+
+def _airports_get():
+    """Return cached DataFrame of large scheduled airports, refreshing daily."""
+    global _airports_df, _airports_df_ts
+    if _airports_df is not None and time.time() - _airports_df_ts < AIRPORTS_TTL:
+        return _airports_df
     try:
-        resp = requests.get(url, timeout=15)
-    except requests.RequestException as exc:
-        return {"flights": [], "count": 0, "error": str(exc)}
+        r = requests.get(AIRPORTS_CSV, timeout=20, headers={"User-Agent": "FlightScope/1.0"})
+        if r.ok:
+            df = pd.read_csv(io.StringIO(r.text), low_memory=False)
+            df = df[
+                (df["type"] == "large_airport") &
+                (df["scheduled_service"] == "yes") &
+                df["iata_code"].notna() &
+                (df["iata_code"].str.strip() != "")
+            ].copy()
+            df["latitude_deg"]  = pd.to_numeric(df["latitude_deg"],  errors="coerce")
+            df["longitude_deg"] = pd.to_numeric(df["longitude_deg"], errors="coerce")
+            df = df.dropna(subset=["latitude_deg", "longitude_deg"])
+            _airports_df    = df
+            _airports_df_ts = time.time()
+    except Exception:
+        pass
+    return _airports_df  # may be stale or None
 
-    if resp.status_code != 200:
-        return {"flights": [], "count": 0, "error": f"OpenSky returned {resp.status_code}"}
 
-    data = resp.json()
+# ── Flight cache (stale-while-revalidate) ─────────────────────────────────────
+_flight_cache      = None   # last successful response dict
+_flight_cache_ts   = 0.0
+_flight_backoff_ts = 0.0    # don't retry sources until this time
+FLIGHT_CACHE_TTL   = 60     # seconds before re-fetching from a live source
+FLIGHT_BACKOFF     = 90     # seconds to wait after all sources fail
+
+# ── Flight helpers ─────────────────────────────────────────────────────────────
+def _opensky_clean(data):
     if not data.get("states"):
-        return {"flights": [], "count": 0, "timestamp": datetime.now().isoformat()}
-
+        return []
     df = pd.DataFrame(data["states"]).iloc[:, :17]
     df.columns = FLIGHT_COLUMNS
     df = df[df["lat"].notna() & df["lon"].notna()]
-
-    # pandas keeps NaN as float NaN in numeric columns even after where(notnull, None),
-    # so scrub after to_dict to ensure JSON compliance
-    records = df.to_dict(orient="records")
-    clean = [
-        {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in row.items()}
-        for row in records
+    rows = df.to_dict(orient="records")
+    return [
+        {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in r.items()}
+        for r in rows
     ]
 
-    return {
-        "flights": clean,
-        "count": len(clean),
-        "timestamp": datetime.now().isoformat(),
+
+def _fetch_adsb(url):
+    """Parse readsb/tar1090-format ADS-B feed (adsb.fi / adsb.lol)."""
+    try:
+        r = requests.get(url, timeout=15, headers={"User-Agent": "FlightScope/1.0"})
+        if not r.ok:
+            print(f"[adsb] {url} → HTTP {r.status_code}")
+            return None
+        raw = r.json()
+        ac_list = raw.get("ac", [])
+        print(f"[adsb] {url} → {r.status_code}, {len(ac_list)} aircraft in payload")
+        out = []
+        for ac in ac_list:
+            try:
+                lat = ac.get("lat")
+                lon = ac.get("lon")
+                if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+                    continue
+                if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                    continue
+                alt = ac.get("alt_baro")
+                gnd = (alt == "ground") or not isinstance(alt, (int, float))
+                alt_m = None if gnd else float(alt) * 0.3048
+                gs    = ac.get("gs")
+                br    = ac.get("baro_rate")
+                trk   = ac.get("track")
+                out.append({
+                    "icao24":      (ac.get("hex") or "").lower(),
+                    "callsign":    (ac.get("flight") or "").strip(),
+                    "origin":      None,
+                    "timePos":     None,
+                    "lastContact": ac.get("seen"),
+                    "lon":         float(lon),
+                    "lat":         float(lat),
+                    "alt":         alt_m,
+                    "onGround":    gnd,
+                    "speed":       float(gs)  * 0.514444 if isinstance(gs,  (int, float)) else None,
+                    "heading":     float(trk)            if isinstance(trk, (int, float)) else None,
+                    "vertRate":    float(br)  * 0.00508  if isinstance(br,  (int, float)) else None,
+                    "sensors":     None,
+                    "geoAlt":      None,
+                    "squawk":      str(ac.get("squawk") or ""),
+                    "spi":         False,
+                    "source":      0,
+                })
+            except Exception:
+                continue
+        return out or None
+    except Exception as exc:
+        print(f"[adsb] {url} → exception: {exc}")
+        return None
+
+
+# Strategic lat/lon centres — 250 NM radius each covers all major air corridors
+_TILE_CENTRES = [
+    (51,  -30),  # North Atlantic
+    (51,   10),  # Europe
+    (40,  -85),  # Eastern North America
+    (37, -115),  # Western North America
+    (35,  140),  # Japan / East Asia
+    (10,  110),  # Southeast Asia
+    (25,   55),  # Gulf / Middle East
+    (20,   80),  # South Asia
+    (-15, -55),  # South America
+    (-28, 133),  # Australia
+]
+
+def _fetch_global_adsb():
+    """Tile the globe with regional adsb.fi v3 queries; deduplicate by icao24."""
+    def _region(lat, lon):
+        return _fetch_adsb(
+            f"https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/250"
+        )
+
+    with ThreadPoolExecutor(max_workers=len(_TILE_CENTRES)) as ex:
+        batches = list(ex.map(lambda c: _region(*c), _TILE_CENTRES))
+
+    seen, combined = set(), []
+    for batch in batches:
+        if not batch:
+            continue
+        for f in batch:
+            if f["icao24"] not in seen:
+                seen.add(f["icao24"])
+                combined.append(f)
+
+    print(f"[adsb.fi] tiled: {len(combined)} unique aircraft across {len(_TILE_CENTRES)} regions")
+    return combined or None
+
+
+# ── Airport enrichment helpers (each runs in its own thread) ──────────────────
+def _adb_fetch(ident):
+    try:
+        r = requests.get(
+            f"https://airportdb.io/api/v1/airport/{ident}?apiToken={AIRPORT_API_TOKEN}",
+            timeout=8)
+        return r.json() if r.ok else {}
+    except Exception:
+        return {}
+
+
+def _wiki_fetch(name):
+    try:
+        r = requests.get(
+            f"https://en.wikipedia.org/api/rest_v1/page/summary/{urlquote(name, safe='')}",
+            timeout=5, headers={"User-Agent": "FlightScope/1.0"})
+        if not r.ok:
+            return {}
+        d = r.json()
+        return {
+            "image":       d.get("thumbnail", {}).get("source"),
+            "description": d.get("extract", "")[:400],
+            "wiki_url":    d.get("content_urls", {}).get("desktop", {}).get("page"),
+        }
+    except Exception:
+        return {}
+
+
+def _weather_fetch(lat, lon):
+    try:
+        r = requests.get("https://api.open-meteo.com/v1/forecast", params={
+            "latitude": lat, "longitude": lon,
+            "current_weather": "true", "wind_speed_unit": "kn",
+        }, timeout=6)
+        if not r.ok:
+            return None
+        cw = r.json().get("current_weather", {})
+        return {
+            "temperature":   cw.get("temperature"),
+            "windspeed":     cw.get("windspeed"),
+            "winddirection": cw.get("winddirection"),
+            "weathercode":   cw.get("weathercode"),
+        }
+    except Exception:
+        return None
+
+
+def _metar_fetch(ident):
+    try:
+        r = requests.get(
+            f"https://tgftp.nws.noaa.gov/data/observations/metar/stations/{ident}.TXT",
+            timeout=5)
+        if not r.ok:
+            return None
+        lines = r.text.splitlines()
+        return lines[1] if len(lines) > 1 else None
+    except Exception:
+        return None
+
+
+def _build_detail(ident, lat, lon, name):
+    """Fetch all 4 enrichment sources in parallel; return merged dict."""
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        f_adb     = ex.submit(_adb_fetch, ident)
+        f_wiki    = ex.submit(_wiki_fetch, name)
+        f_weather = ex.submit(_weather_fetch, lat, lon)
+        f_metar   = ex.submit(_metar_fetch, ident)
+        adb, wiki, weather, metar = (
+            f_adb.result(), f_wiki.result(), f_weather.result(), f_metar.result()
+        )
+
+    detail = {
+        "ident":        ident,
+        "name":         adb.get("name") or name,
+        "lat":          lat,
+        "lon":          lon,
+        "runways":      adb.get("runways", []),
+        "iata":         adb.get("iata_code") or None,
+        "type":         adb.get("type") or None,
+        "city":         adb.get("municipality") or None,
+        "country":      adb.get("iso_country") or None,
+        "elevation_ft": adb.get("elevation_ft"),
+        "weather":      weather,
+        "metar":        metar or "N/A",
     }
+    detail.update(wiki)   # image, description, wiki_url
+    return detail
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+@app.get("/api/flights")
+def get_flights():
+    """Live aircraft from OpenSky (OAuth2, cached 60 s). Serves stale on failure."""
+    global _flight_cache, _flight_cache_ts, _flight_backoff_ts
+    now = time.time()
+
+    if _flight_cache is not None and now - _flight_cache_ts < FLIGHT_CACHE_TTL:
+        return _flight_cache
+
+    if now < _flight_backoff_ts:
+        if _flight_cache is not None:
+            return {**_flight_cache, "stale": True}
+        return {"flights": [], "count": 0, "error": "Sources temporarily unavailable"}
+
+    try:
+        r = requests.get("https://opensky-network.org/api/states/all", timeout=15,
+                         headers=_opensky_tokens.headers())
+        print(f"[flights] opensky: HTTP {r.status_code}")
+        if r.status_code == 401:
+            _opensky_tokens.token = None
+            r = requests.get("https://opensky-network.org/api/states/all", timeout=15,
+                             headers=_opensky_tokens.headers())
+            print(f"[flights] opensky retry: HTTP {r.status_code}")
+        if r.status_code == 429:
+            _flight_backoff_ts = now + FLIGHT_BACKOFF
+            if _flight_cache is not None:
+                return {**_flight_cache, "stale": True}
+        elif r.ok:
+            clean = _opensky_clean(r.json())
+            if clean:
+                result = {"flights": clean, "count": len(clean), "source": "opensky",
+                          "timestamp": datetime.now().isoformat()}
+                _flight_cache    = result
+                _flight_cache_ts = now
+                return result
+    except Exception as exc:
+        print(f"[flights] opensky: exception: {exc}")
+
+    _flight_backoff_ts = now + FLIGHT_BACKOFF
+    if _flight_cache is not None:
+        return {**_flight_cache, "stale": True}
+    return {"flights": [], "count": 0, "error": "All flight data sources unavailable"}
 
 
 @app.get("/api/track/{icao24}")
 def get_track(icao24: str):
-    """Fetch recent flight track from OpenSky Network."""
-    url = f"https://opensky-network.org/api/tracks/all?icao24={icao24.lower()}&time=0"
     try:
-        resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            return resp.json()
+        r = requests.get(
+            f"https://opensky-network.org/api/tracks/all?icao24={icao24.lower()}&time=0",
+            timeout=10)
+        return r.json() if r.ok else {"icao24": icao24, "path": []}
+    except Exception:
         return {"icao24": icao24, "path": []}
-    except requests.RequestException as exc:
-        return {"icao24": icao24, "path": [], "error": str(exc)}
+
+
+@app.get("/api/aircraft/{icao24}")
+def get_aircraft_info(icao24: str):
+    try:
+        r = requests.get(f"https://hexdb.io/api/v1/aircraft/{icao24.lower()}", timeout=8)
+        return r.json() if r.ok else {}
+    except Exception:
+        return {}
+
+
+@app.get("/api/route/{callsign}")
+def get_route(callsign: str):
+    try:
+        r = requests.get(
+            f"https://opensky-network.org/api/routes?callsign={callsign.strip().upper()}",
+            timeout=8)
+        return r.json() if r.ok else {}
+    except Exception:
+        return {}
+
+
+@app.get("/api/flight-history/{icao24}")
+def get_flight_history(icao24: str):
+    end = int(time.time())
+    try:
+        r = requests.get(
+            "https://opensky-network.org/api/flights/aircraft",
+            params={"icao24": icao24.lower(), "begin": end - 86400, "end": end},
+            timeout=10)
+        if r.ok:
+            data = r.json() or []
+            return {"flights": data, "latest": data[-1] if data else None}
+    except Exception:
+        pass
+    return {"flights": [], "latest": None}
 
 
 @app.get("/api/airports")
 def get_airports():
-    """Fetch airport info, weather, and METAR for the configured airports."""
-    result = []
-    for ident, coords in AIRPORTS.items():
-        lat, lon = coords["lat"], coords["lon"]
-        airport = {
-            "ident": ident,
-            "name": ident,
-            "lat": lat,
-            "lon": lon,
-            "runways": [],
-            "weather": None,
-            "metar": "N/A",
-        }
+    """All large scheduled airports from OurAirports CSV — basic info, no external calls."""
+    df = _airports_get()
+    if df is None:
+        return {"airports": []}
 
-        # Airport data from airportdb.io
-        try:
-            resp = requests.get(
-                f"https://airportdb.io/api/v1/airport/{ident}?apiToken={AIRPORT_API_TOKEN}",
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                ad = resp.json()
-                airport.update({
-                    "name": ad.get("name", ident),
-                    "lat": ad.get("latitude", lat),
-                    "lon": ad.get("longitude", lon),
-                    "runways": ad.get("runways", []),
-                })
-        except requests.RequestException:
-            pass
+    def sv(row, col):
+        v = row.get(col)
+        return str(v) if pd.notna(v) and v != "" else None
 
-        # Weather from Open-Meteo
-        try:
-            wresp = requests.get(
-                f"https://api.open-meteo.com/v1/forecast"
-                f"?latitude={airport['lat']}&longitude={airport['lon']}&current_weather=true",
-                timeout=10,
-            )
-            if wresp.ok:
-                cw = wresp.json().get("current_weather", {})
-                airport["weather"] = {
-                    "temperature": cw.get("temperature"),
-                    "windspeed": cw.get("windspeed"),
-                }
-        except requests.RequestException:
-            pass
-
-        # METAR from NOAA
-        try:
-            mresp = requests.get(
-                f"https://tgftp.nws.noaa.gov/data/observations/metar/stations/{ident}.TXT",
-                timeout=10,
-            )
-            if mresp.ok:
-                lines = mresp.text.splitlines()
-                airport["metar"] = lines[1] if len(lines) > 1 else "N/A"
-        except requests.RequestException:
-            pass
-
-        result.append(airport)
-
-    return {"airports": result}
+    airports = []
+    for _, row in df.iterrows():
+        airports.append({
+            "ident":        str(row["ident"]),
+            "name":         sv(row, "name") or str(row["ident"]),
+            "lat":          float(row["latitude_deg"]),
+            "lon":          float(row["longitude_deg"]),
+            "iata":         sv(row, "iata_code"),
+            "country":      sv(row, "iso_country"),
+            "type":         sv(row, "type"),
+            "city":         sv(row, "municipality"),
+            "elevation_ft": sv(row, "elevation_ft"),
+            "tier": 1 if sv(row, "iata_code") in TIER1_IATA else 2,
+        })
+    return {"airports": airports}
 
 
-# ----- Serve React build in production -----
+@app.get("/api/airport/{ident}")
+def get_airport_detail(ident: str):
+    """Enriched data for one airport (runways, weather, Wikipedia image, METAR).
+    Called lazily when the user opens an airport popup."""
+    ident = ident.upper()
+    df = _airports_get()
+    if df is None:
+        return {}
+    rows = df[df["ident"] == ident]
+    if rows.empty:
+        return {}
+    row  = rows.iloc[0]
+    lat  = float(row["latitude_deg"])
+    lon  = float(row["longitude_deg"])
+    name = str(row.get("name", ident))
+    return _build_detail(ident, lat, lon, name)
+
+
+# ── Serve React build in production ───────────────────────────────────────────
 _dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 if os.path.isdir(_dist):
     app.mount("/assets", StaticFiles(directory=os.path.join(_dist, "assets")), name="assets")

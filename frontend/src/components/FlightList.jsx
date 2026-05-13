@@ -4,6 +4,12 @@ import { EMERGENCY_SQUAWKS } from '../utils/constants'
 const LIST_LIMIT = 300
 const ft = v => v != null ? Math.round(v * 3.28084) : null
 
+// Vertical-rate arrow: ↑ climbing, ↓ descending, blank if level / unknown
+function vrArrow(vr) {
+  if (vr == null || Math.abs(vr) < 0.5) return null
+  return vr > 0 ? { char: '↑', color: 'var(--green)' } : { char: '↓', color: 'var(--red)' }
+}
+
 export default function FlightList({ flights, total, selected, onSelect }) {
   const [sortBy, setSortBy] = useState('alt')
 
@@ -18,7 +24,6 @@ export default function FlightList({ flights, total, selected, onSelect }) {
   return (
     <div className="fl-wrap">
 
-      {/* Header row */}
       <div className="fl-meta-row">
         <span className="fl-count">
           {flights.length.toLocaleString()}
@@ -45,7 +50,6 @@ export default function FlightList({ flights, total, selected, onSelect }) {
         </div>
       </div>
 
-      {/* Column headers */}
       <div className="fl-header">
         <span>Callsign</span>
         <span>Country</span>
@@ -64,7 +68,7 @@ export default function FlightList({ flights, total, selected, onSelect }) {
 
         {flights.length > LIST_LIMIT && (
           <div className="fl-more">
-            +{(flights.length - LIST_LIMIT).toLocaleString()} more — refine search or filters
+            +{(flights.length - LIST_LIMIT).toLocaleString()} more — refine filters to see them
           </div>
         )}
 
@@ -85,6 +89,7 @@ function FlightRow({ f, isSelected, onSelect }) {
   const altFt      = ft(f.alt)
   const altDisplay = f.onGround ? 'GND' : altFt != null ? altFt.toLocaleString() : '—'
   const isEmg      = Boolean(EMERGENCY_SQUAWKS[String(f.squawk)])
+  const vr         = vrArrow(f.vertRate)
 
   return (
     <div
@@ -94,11 +99,16 @@ function FlightRow({ f, isSelected, onSelect }) {
         isEmg      ? 'fl-row--emergency' : '',
       ].filter(Boolean).join(' ')}
       onClick={() => onSelect(f)}
-      title={isEmg ? `Emergency squawk ${f.squawk}` : undefined}
+      title={isEmg ? `⚠ Emergency squawk ${f.squawk}` : undefined}
     >
       <span className="fl-cs">{callsign}</span>
       <span className="fl-origin">{f.origin || '—'}</span>
-      <span className={`fl-alt${f.onGround ? ' fl-alt--gnd' : ''}`}>{altDisplay}</span>
+      <span className={`fl-alt${f.onGround ? ' fl-alt--gnd' : ''}`}>
+        {altDisplay}
+        {vr && !f.onGround && (
+          <span className="fl-vr" style={{ color: vr.color }}>{vr.char}</span>
+        )}
+      </span>
     </div>
   )
 }

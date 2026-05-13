@@ -1,4 +1,4 @@
-export const REFRESH_MS = 10000 // OpenSky anonymous rate limit: 1 req / 10 s
+export const REFRESH_MS = 10000
 
 export const TILE_LAYERS = {
   dark: {

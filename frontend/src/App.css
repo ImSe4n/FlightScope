@@ -694,3 +694,139 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
   transition: background 0.15s;
 }
 .popup-detail-btn:hover { background: rgba(56,189,248,0.24); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FLIGHT DETAIL — NEW SECTIONS
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ICAO badge next to callsign */
+.fd-icao-badge {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--txt-3); letter-spacing: 0.04em;
+}
+
+/* Generic card container used by Route + Aircraft sections */
+.fd-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px 12px;
+}
+.fd-card-label {
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--txt-3); margin-bottom: 9px;
+}
+
+/* ── Route card ──────────────────────────────────────────────────────────── */
+.fd-route {
+  display: flex; align-items: center; gap: 8px;
+}
+.fd-route-end {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+}
+.fd-route-end--right { text-align: right; }
+.fd-route-icao {
+  font-family: var(--mono); font-size: 16px;
+  font-weight: 800; color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.fd-route-role  { font-size: 10px; color: var(--txt-3); }
+.fd-route-time  { font-size: 10px; color: var(--txt-2); font-family: var(--mono); margin-top: 2px; }
+.fd-route-mid {
+  display: flex; align-items: center; flex-direction: row; gap: 3px;
+  flex-shrink: 0;
+}
+.fd-route-dash  { flex: 1; height: 1px; background: var(--border-h); width: 16px; }
+.fd-route-plane { font-size: 13px; color: var(--txt-2); }
+.fd-route-op    { font-size: 10px; color: var(--txt-3); margin-top: 7px; }
+
+/* ── Aircraft info card ──────────────────────────────────────────────────── */
+.fd-ac-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;
+}
+.fd-ac-item { display: flex; flex-direction: column; gap: 2px; }
+.fd-ac-item--full { grid-column: span 2; }
+.fd-ac-key { font-size: 9px; color: var(--txt-3); text-transform: uppercase; letter-spacing: 0.07em; }
+.fd-ac-val { font-size: 12px; color: var(--txt); font-weight: 600; }
+
+/* ── Vertical-rate arrow in flight list ──────────────────────────────────── */
+.fl-vr { font-size: 9px; margin-left: 3px; font-weight: 700; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   AIRPORT POPUP — NEW DESIGN
+   ════════════════════════════════════════════════════════════════════════════ */
+.airport-popup { padding: 0; }
+.airport-popup .popup-airport-body { padding: 12px 14px; }
+
+/* Wikipedia image banner */
+.popup-img-wrap {
+  width: 100%; height: 140px; overflow: hidden;
+  border-radius: 10px 10px 0 0;
+}
+.popup-img-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+
+/* Loading indicator inside airport popup */
+.popup-loading {
+  font-size: 11px; color: var(--txt-3);
+  padding: 6px 0; font-style: italic;
+}
+
+/* Description excerpt */
+.popup-description {
+  font-size: 11px; color: var(--txt-2);
+  line-height: 1.55; margin-top: 7px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Weather row */
+.popup-wx {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px; font-size: 12px; color: var(--txt-2);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 6px 10px;
+}
+.popup-wx-cond { color: var(--txt); font-weight: 600; }
+
+/* METAR block */
+.popup-metar-wrap {
+  margin-top: 8px; padding: 6px 9px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.popup-metar-label {
+  font-size: 8px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--txt-3); display: block; margin-bottom: 3px;
+}
+.popup-metar {
+  font-size: 10px; color: var(--txt-2);
+  word-break: break-all; font-family: var(--mono);
+  line-height: 1.5;
+}
+
+/* Runways block */
+.popup-runways { margin-top: 8px; }
+.popup-runways-title {
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--txt-3); margin-bottom: 4px;
+}
+.runway-line { font-size: 11px; color: var(--txt-2); margin-top: 2px; padding-left: 4px; }
+
+/* Wikipedia link */
+.popup-wiki-link {
+  display: inline-block; margin-top: 10px;
+  font-size: 11px; color: var(--accent);
+  text-decoration: none; font-weight: 600;
+  transition: opacity 0.15s;
+}
+.popup-wiki-link:hover { opacity: 0.7; }
