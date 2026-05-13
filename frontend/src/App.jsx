@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useFlights, useAirports } from './hooks/useFlights'
+import { useFlights, useAirports, useTrack } from './hooks/useFlights'
 import Header   from './components/Header'
 import Sidebar  from './components/Sidebar'
 import MapView  from './components/MapView'
@@ -25,6 +25,8 @@ export default function App() {
   const [selected, setSelected] = useState(null)
   const [flyTarget, setFlyTarget] = useState(null)
   const [mapLayer, setMapLayer]   = useState('dark')
+
+  const { track } = useTrack(selected?.icao24)
 
   // Keep the selected flight's data fresh after each auto-refresh
   useEffect(() => {
@@ -136,6 +138,7 @@ export default function App() {
           mapLayer={mapLayer}
           onSelect={handleSelect}
           onDeselect={() => setSelected(null)}
+          track={track}
         />
       </div>
     </div>

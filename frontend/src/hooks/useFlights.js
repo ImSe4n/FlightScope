@@ -47,3 +47,22 @@ export function useAirports() {
 
   return airports
 }
+
+export function useTrack(icao24) {
+  const [track, setTrack]   = useState(null)
+  const [trackLoading, setTrackLoading] = useState(false)
+
+  useEffect(() => {
+    if (!icao24) { setTrack(null); return }
+    setTrackLoading(true)
+    fetch(`/api/track/${icao24}`)
+      .then(r => r.json())
+      .then(data => {
+        setTrack(data.path ?? null) // [[time, lat, lon, baro_alt, heading, on_ground], ...]
+        setTrackLoading(false)
+      })
+      .catch(() => { setTrack(null); setTrackLoading(false) })
+  }, [icao24])
+
+  return { track, trackLoading }
+}

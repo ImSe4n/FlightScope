@@ -7,10 +7,17 @@ export default function Header({
 }) {
   return (
     <header className="header">
-      <span className="header-title">✈ FlightScope</span>
+      <div className="header-brand">
+        <span className="header-logo">✈</span>
+        <span className="header-title">
+          Flight<span className="header-title-accent">Scope</span>
+        </span>
+      </div>
+
+      <div className="header-sep" />
 
       <div className="search-wrap">
-        <span className="search-icon">🔍</span>
+        <span className="search-icon">⌕</span>
         <input
           className="search-input"
           placeholder="Search callsign, ICAO24, country, squawk…"
@@ -27,11 +34,11 @@ export default function Header({
           <span className="badge-err" title={error}>⚠ API Error</span>
         ) : (
           <>
-            <StatChip value={stats.total}       label="flights"   color="#4fc3f7" />
-            <StatChip value={stats.inAir}       label="airborne"  color="#81c784" />
-            <StatChip value={stats.countries}   label="countries" color="#ffb74d" />
+            <StatChip value={stats.total}       label="flights"   color="#38bdf8" />
+            <StatChip value={stats.inAir}       label="airborne"  color="#4ade80" />
+            <StatChip value={stats.countries}   label="countries" color="#fbbf24" />
             {stats.emergencies > 0 && (
-              <StatChip value={stats.emergencies} label="SOS" color="#ef5350" blink />
+              <StatChip value={stats.emergencies} label="SOS" color="#f87171" blink />
             )}
           </>
         )}
@@ -48,7 +55,7 @@ export default function Header({
           ))}
         </div>
 
-        <span className="updated">{loading ? '↻ Updating…' : updatedAt ? `↺ ${updatedAt}` : ''}</span>
+        <span className="updated">{loading ? '↻ updating…' : updatedAt ? `↺ ${updatedAt}` : ''}</span>
         <button className="btn-refresh" onClick={onRefresh} disabled={loading}>Refresh</button>
       </div>
     </header>

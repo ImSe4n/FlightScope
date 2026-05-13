@@ -5,7 +5,7 @@ export default function EmergencyBanner({ emergencies, onSelect }) {
 
   return (
     <div className="emergency-banner">
-      <div className="emg-title">⚠ Emergency Squawks Active</div>
+      <div className="emg-title"><span className="emg-dot" />Emergency Squawks Active</div>
       {emergencies.map(f => {
         const sq   = String(f.squawk)
         const info = EMERGENCY_SQUAWKS[sq] ?? { label: 'Emergency', color: '#e53935' }

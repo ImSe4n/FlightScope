@@ -76,6 +76,19 @@ def get_flights():
     }
 
 
+@app.get("/api/track/{icao24}")
+def get_track(icao24: str):
+    """Fetch recent flight track from OpenSky Network."""
+    url = f"https://opensky-network.org/api/tracks/all?icao24={icao24.lower()}&time=0"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            return resp.json()
+        return {"icao24": icao24, "path": []}
+    except requests.RequestException as exc:
+        return {"icao24": icao24, "path": [], "error": str(exc)}
+
+
 @app.get("/api/airports")
 def get_airports():
     """Fetch airport info, weather, and METAR for the configured airports."""
