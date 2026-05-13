@@ -1,0 +1,497 @@
+/* ─── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+
+/* ─── App shell ──────────────────────────────────────────────────────────── */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #1a2327;
+  color: #eceff1;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  Header                                                                  */
+/* ══════════════════════════════════════════════════════════════════════════ */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #263238;
+  padding: 8px 14px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  z-index: 1000;
+}
+
+.header-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: #eceff1;
+}
+
+/* Search */
+.search-wrap {
+  position: relative;
+  flex: 1;
+  max-width: 360px;
+}
+.search-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.search-input {
+  width: 100%;
+  background: #37474f;
+  border: 1px solid #546e7a;
+  border-radius: 6px;
+  padding: 6px 28px 6px 28px;
+  color: #eceff1;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.search-input:focus     { border-color: #4fc3f7; box-shadow: 0 0 0 2px rgba(79,195,247,0.2); }
+.search-input::placeholder { color: #546e7a; }
+.search-clear {
+  position: absolute;
+  right: 6px; top: 50%;
+  transform: translateY(-50%);
+  background: none; border: none;
+  color: #78909c; cursor: pointer;
+  font-size: 11px; padding: 3px;
+  line-height: 1;
+}
+.search-clear:hover { color: #eceff1; }
+
+/* Header right cluster */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Stat chips */
+.stat-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  min-width: 44px;
+}
+.stat-chip--blink .stat-val { animation: blink 1s step-start infinite; }
+.stat-val   { font-size: 14px; font-weight: 700; }
+.stat-label { font-size: 10px; color: #546e7a; text-transform: uppercase; letter-spacing: 0.05em; }
+
+@keyframes blink { 50% { opacity: 0.3; } }
+
+.badge-err {
+  background: #b71c1c;
+  color: #ffcdd2;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Layer switcher */
+.layer-switcher { display: flex; gap: 2px; }
+.layer-btn {
+  background: #37474f;
+  border: 1px solid #546e7a;
+  color: #b0bec5;
+  padding: 4px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.layer-btn:first-child { border-radius: 4px 0 0 4px; }
+.layer-btn:last-child  { border-radius: 0 4px 4px 0; }
+.layer-btn:not(:first-child) { border-left: none; }
+.layer-btn--active { background: #546e7a; color: #eceff1; }
+.layer-btn:hover:not(.layer-btn--active) { background: #455a64; color: #eceff1; }
+
+.updated { color: #455a64; font-size: 11px; white-space: nowrap; }
+
+.btn-refresh {
+  background: #37474f;
+  color: #eceff1;
+  border: 1px solid #546e7a;
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.btn-refresh:hover:not(:disabled) { background: #455a64; }
+.btn-refresh:disabled { opacity: 0.4; cursor: default; }
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  Body + Sidebar                                                          */
+/* ══════════════════════════════════════════════════════════════════════════ */
+.body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  background: #263238;
+  border-right: 1px solid #2e3e46;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sb-heading {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #546e7a;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Main scrollable area (detail or list) */
+.sb-main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #37474f transparent;
+}
+
+/* ── Emergency Banner ────────────────────────────────────────────────────── */
+.emergency-banner {
+  background: #1a0000;
+  border-bottom: 1px solid #b71c1c;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+.emg-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #ef5350;
+  margin-bottom: 5px;
+}
+.emg-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0 4px 6px;
+  border-left: 3px solid;
+  margin-bottom: 3px;
+  cursor: pointer;
+  border-radius: 0 3px 3px 0;
+  transition: background 0.1s;
+}
+.emg-row:hover    { background: rgba(255,255,255,0.05); }
+.emg-callsign     { font-family: monospace; font-weight: 700; color: #eceff1; font-size: 13px; }
+.emg-type         { font-size: 11px; }
+
+/* ── Filter Panel ────────────────────────────────────────────────────────── */
+.filter-panel {
+  padding: 10px 12px;
+  border-bottom: 1px solid #2e3e46;
+  flex-shrink: 0;
+}
+.filter-checks   { margin-bottom: 8px; display: flex; flex-direction: column; gap: 5px; }
+.filter-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #b0bec5;
+  font-size: 12px;
+  cursor: pointer;
+}
+.filter-check input { accent-color: #4fc3f7; cursor: pointer; }
+.filter-select {
+  width: 100%;
+  background: #37474f;
+  border: 1px solid #3d5560;
+  color: #eceff1;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 6px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.filter-select:focus { border-color: #4fc3f7; }
+
+.filter-range-row    { margin-bottom: 6px; }
+.filter-range-label  { display: block; font-size: 10px; color: #546e7a; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.04em; }
+.filter-range-inputs { display: flex; align-items: center; gap: 5px; }
+.filter-num {
+  flex: 1;
+  min-width: 0;
+  background: #37474f;
+  border: 1px solid #3d5560;
+  color: #eceff1;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.filter-num:focus { border-color: #4fc3f7; }
+.filter-num::placeholder { color: #546e7a; }
+.range-sep { color: #546e7a; flex-shrink: 0; font-size: 12px; }
+
+.btn-clear {
+  background: none;
+  border: none;
+  color: #4fc3f7;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.btn-clear:hover { text-decoration: underline; }
+
+/* ── Flight List ─────────────────────────────────────────────────────────── */
+.fl-wrap { display: flex; flex-direction: column; height: 100%; }
+.fl-wrap > .sb-heading { padding: 8px 12px 0; flex-shrink: 0; }
+.fl-total { color: #3d5560; font-weight: 400; }
+
+.fl-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #37474f transparent;
+}
+.fl-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 52px;
+  padding: 4px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #455a64;
+  border-bottom: 1px solid #2e3e46;
+  position: sticky;
+  top: 0;
+  background: #263238;
+  z-index: 1;
+}
+.fl-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 52px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-left: 2px solid transparent;
+}
+.fl-row:hover           { background: #2e3e46; }
+.fl-row--active         { background: #1b3040; border-left-color: #4fc3f7; }
+.fl-row--emergency      { background: #1a0000; border-left-color: #e53935; }
+.fl-row--emergency:hover{ background: #240000; }
+
+.fl-cs     { font-family: monospace; font-size: 12px; font-weight: 600; color: #eceff1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-origin { color: #78909c; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 4px; }
+.fl-alt    { color: #b0bec5; font-size: 11px; text-align: right; }
+.fl-alt--gnd { color: #78909c; }
+
+.fl-more  { padding: 10px 12px; color: #455a64; font-size: 11px; text-align: center; font-style: italic; }
+.fl-empty { padding: 20px 12px; color: #455a64; font-size: 12px; text-align: center; }
+
+/* ── Flight Detail ───────────────────────────────────────────────────────── */
+.flight-detail {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+}
+
+.fd-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.fd-callsign {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: monospace;
+  color: #eceff1;
+  letter-spacing: 0.03em;
+}
+.fd-icao { font-size: 11px; color: #78909c; margin-top: 3px; }
+
+.fd-close {
+  background: #37474f;
+  border: none;
+  color: #b0bec5;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.fd-close:hover { background: #546e7a; color: #eceff1; }
+
+.fd-emergency {
+  padding: 6px 10px;
+  border: 1px solid var(--ec, #e53935);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ec, #e53935) 15%, transparent);
+  color: var(--ec, #e53935);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Aircraft photo */
+.aircraft-photo {
+  display: block;
+  border-radius: 6px;
+  overflow: hidden;
+  text-decoration: none;
+  border: 1px solid #37474f;
+  transition: border-color 0.15s;
+}
+.aircraft-photo:hover { border-color: #4fc3f7; }
+.aircraft-photo img   { width: 100%; display: block; }
+.photo-credit { padding: 4px 8px; font-size: 10px; color: #546e7a; background: #1e2d35; }
+.photo-loading { color: #455a64; font-size: 11px; font-style: italic; }
+
+/* Detail rows */
+.fd-body { display: flex; flex-direction: column; }
+.fd-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid #2e3e46;
+  gap: 8px;
+}
+.fd-row:last-child { border-bottom: none; }
+.fd-key  { color: #546e7a; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+.fd-val  { color: #eceff1; font-size: 12px; text-align: right; word-break: break-all; }
+.fd-mono { font-family: monospace; font-size: 11px; }
+
+/* Copy buttons */
+.fd-copy-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn-copy {
+  background: #37474f;
+  border: 1px solid #546e7a;
+  color: #b0bec5;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-copy:hover { background: #455a64; color: #eceff1; }
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  Map                                                                     */
+/* ══════════════════════════════════════════════════════════════════════════ */
+.map-wrap { flex: 1; position: relative; overflow: hidden; }
+.map      { width: 100%; height: 100%; }
+
+/* ── Leaflet icon classes (injected outside React) ───────────────────────── */
+.plane-icon {
+  display: block;
+  transform: rotate(var(--r, 0deg));
+  font-size: 16px;
+  line-height: 1;
+  color: #4fc3f7;
+  filter: drop-shadow(0 0 3px rgba(0,0,0,0.9));
+  user-select: none;
+}
+.plane-icon--sel {
+  color: #ff9800;
+  font-size: 22px;
+  filter: drop-shadow(0 0 8px rgba(255,152,0,0.7));
+  animation: sel-pulse 1.4s ease-in-out infinite;
+}
+.plane-icon--emergency {
+  color: var(--ec, #e53935);
+  font-size: 20px;
+  filter: drop-shadow(0 0 6px var(--ec, #e53935));
+  animation: emg-pulse 0.8s ease-in-out infinite;
+}
+.airport-icon { display: block; font-size: 20px; line-height: 1; user-select: none; }
+
+@keyframes sel-pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+@keyframes emg-pulse { 0%,100%{opacity:1} 50%{opacity:0.3}  }
+
+/* ── Leaflet popup overrides ─────────────────────────────────────────────── */
+.leaflet-popup-content-wrapper {
+  border-radius: 7px;
+  padding: 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+}
+.leaflet-popup-content { margin: 0; }
+
+/* ── Popup content ───────────────────────────────────────────────────────── */
+.popup {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 12px;
+  padding: 10px 12px;
+  min-width: 210px;
+  color: #212121;
+}
+.popup-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1565c0;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.popup-emg-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: white;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.popup-sub   { font-size: 11px; color: #757575; margin-bottom: 6px; }
+.popup-table { width: 100%; border-collapse: collapse; }
+.popup-table td { padding: 2px 8px 2px 0; vertical-align: top; }
+.popup-table td:first-child { color: #546e7a; font-weight: 600; white-space: nowrap; width: 68px; }
+.popup-row   { margin-top: 8px; line-height: 1.6; font-size: 12px; }
+.popup-metar { font-size: 10px; color: #555; word-break: break-all; }
+.runway-line { font-size: 11px; color: #555; margin-top: 2px; padding-left: 4px; }
+
+.popup-detail-btn {
+  margin-top: 9px;
+  width: 100%;
+  background: #1565c0;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.popup-detail-btn:hover { background: #1976d2; }
