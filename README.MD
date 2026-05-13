@@ -1,98 +1,148 @@
-# FlightScope
+# FlightScope Web
 
-A real-time flight tracking application that displays aircraft within a 100 NM radius of Ottawa on an interactive map.
+**Course:** ICS3U-01  
+**Author:** Sean Nie
+
+A full-stack live flight tracking web app. Shows every airborne aircraft in real time on an interactive world map, with detailed flight, aircraft, and airport information.
+
+---
 
 ## Features
-- **Live Flight Tracking**: Shows positions of all aircraft in the Ottawa area using OpenSky Network API
-- **Airport Information**: Displays details for Ottawa area airports (CYOW, CYND, CYRO) including runways and coordinates
-- **Weather Integration**: Shows real-time weather conditions from Open-Meteo API at each airport location
-- **METAR Reports**: Provides aviation weather reporting (METAR) from NOAA for each airport
-- **Interactive Map**: Uses Folium to create an interactive map embedded in a PySide6 GUI
-- **Aircraft Details**: Click on aircraft icons to view flight information (callsign, altitude, speed, heading)
-- **Modern UI**: Clean interface with custom styling and status indicators
 
-## Installation
+**Live Flight Map**
+- Real-time positions for thousands of aircraft worldwide, sourced from the OpenSky Network
+- Aircraft icons coloured by altitude (green → low, blue → mid, purple → high, white → very high)
+- Icons rotate to match the aircraft's heading
+- Emergency squawk codes (7500 Hijack, 7600 Radio Failure, 7700 Emergency) highlighted with a blinking badge
+- Clusters nearby aircraft at low zoom levels; unpacks at zoom 14+
+- Flight path trail shown when an aircraft is selected
 
-To run FlightScope, you'll need Python 3.8+ and the following packages:
+**Flight Detail Panel**
+- Click any aircraft to open a sidebar panel with:
+  - Callsign, ICAO24 hex code, airborne/ground status
+  - Altitude (ft), speed (kt), heading, vertical rate
+  - Departure → arrival route with times (from OpenSky route database + flight history)
+  - Aircraft registration, ICAO type code, model, operator (from hexdb.io)
+  - Aircraft photo (from Planespotters.net)
+  - Squawk code, SPI flag, data source type, last contact time
+  - Copy buttons for ICAO24, callsign, and coordinates
 
-- **PySide6**: GUI framework
-  ```powershell
-  pip install PySide6==6.6.0
-  ```
-- **PySide6-QtWebEngineWidgets**: Web view component for displaying maps
-  ```powershell
-  pip install PySide6-QtWebEngineWidgets==6.6.0
-  ```
-- **pandas**: Data analysis and manipulation
-  ```powershell
-  pip install pandas==2.1.4
-  ```
-- **folium**: Interactive map creation
-  ```powershell
-  pip install folium==0.15.0
-  ```
-- **requests**: HTTP library for API calls
-  ```powershell
-  pip install requests==2.31.0
-  ```
-- **geopy**: Geolocation utilities
-  ```powershell
-  pip install geopy==2.4.1
-  ```
+**Airports**
+- ~500 large scheduled airports plotted as map pins (data from OurAirports)
+- ~60 major global hubs visible at all zoom levels; remaining airports appear at zoom 4+
+- Click an airport pin to load enriched details:
+  - Wikipedia image and description
+  - Runways (identifier, length, width, surface)
+  - Current weather (temperature, wind speed/direction, condition)
+  - Live METAR string
+  - Elevation, country, city
 
-Install all requirements at once:
-```powershell
+**Search & Filters**
+- Real-time search by callsign, ICAO24, origin country, or squawk
+- Filters: hide ground traffic, emergency only, country, data source, altitude range, speed range
+
+**Map Layers**
+- Dark, Light, Satellite, Street (switchable from the header)
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite, react-leaflet, leaflet.markercluster |
+| Backend | Python, FastAPI, uvicorn |
+| Flight data | OpenSky Network (OAuth2) |
+| Airport data | OurAirports CSV (cached daily) |
+| Airport detail | airportdb.io, Wikipedia REST API, Open-Meteo, NOAA METAR |
+| Aircraft info | hexdb.io |
+| Aircraft photos | Planespotters.net |
+| Route data | OpenSky route database |
+
+---
+
+## Setup
+
+### Requirements
+
+- Python 3.10+
+- Node.js 18+
+
+### 1. Install Python dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-## Usage
+### 2. Configure credentials
 
-1. Open a terminal and navigate to the project directory
-2. Run the application:
-   ```powershell
-   python main.py
-   ```
-3. Click "Refresh Data" to fetch the latest flight information
-4. Click on any aircraft or airport marker to view detailed information
+Create a `.env` file in the project root:
 
-## Known Bugs
+```
+OPENSKY_CLIENT_ID=your_client_id
+OPENSKY_CLIENT_SECRET=your_client_secret
+```
 
-- **Manual Refresh Required**: The map does not automatically update - user must click "Refresh Data" button
-- **Airport API Failures**: Sometimes the AirportDB.io API fails to return data; application uses default coordinates in these cases
-- **OpenSky API Limitations**: Without valid credentials, data may be limited or missing
-- **Performance Issues**: Map rendering can be slow with many aircraft displayed
+Get these from [opensky-network.org](https://opensky-network.org) → Account → API Clients. Create a new API client and copy the `client_id` and `client_secret` — these are different from your account login username/password.
 
-## Cheat Codes
+### 3. Build the frontend
 
-Follow these steps to quickly evaluate all features of FlightScope:
+```bash
+cd frontend
+npm install
+npm run build
+```
 
-1. **Setup and Launch (2 minutes)**
-   - Install all dependencies: `pip install -r requirements.txt`
-   - Launch the app: `python main.py`
+### 4. Run the server
 
-2. **View Base Functionality (1 minute)**
-   - Click "Refresh Data" to see flights and airports
-   - The map will display with Ottawa at the center
-   - You should see blue plane icons for aircraft and red info icons for airports
+```bash
+uvicorn server:app
+```
 
-3. **Explore Airport Data**
-   - Click on any red airport marker to view:
-     - Airport name and ICAO code
-     - Runway information
-     - Current weather conditions
-     - METAR aviation weather report
+Open [http://localhost:8000](http://localhost:8000).
 
-4. **Explore Flight Data**
-   - Click on any blue aircraft marker to see:
-     - Aircraft ICAO24 identifier and callsign
-     - Current altitude, speed, and heading
-     - Squawk code and vertical rate
-     
-## Support
+---
 
-For questions, bug reports, or feature requests, please contact:
-- Sean Nie
-- Email: snie1@ocdsb.ca
+## Development
 
-## Sources
-Reference Tracker: [Click Me!](https://docs.google.com/document/d/1ggwyiWpPxQlxJMC85tNu_q6N7F8dK0O2MklQ_9OUHi8/edit?tab=t.0)
+To run the frontend dev server with hot reload alongside the backend:
+
+```bash
+# Terminal 1 — backend
+uvicorn server:app --reload
+
+# Terminal 2 — frontend
+cd frontend
+npm run dev
+```
+
+The frontend dev server runs on `http://localhost:5173` and proxies API calls to the backend.
+
+---
+
+## API Endpoints
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/flights` | All live aircraft (cached 60 s) |
+| `GET /api/airports` | All large scheduled airports |
+| `GET /api/airport/{ident}` | Enriched airport detail (weather, runways, Wikipedia) |
+| `GET /api/aircraft/{icao24}` | Aircraft registration and type info |
+| `GET /api/route/{callsign}` | Scheduled route for a callsign |
+| `GET /api/track/{icao24}` | Recent flight path points |
+| `GET /api/flight-history/{icao24}` | Last 24 h of flights for an aircraft |
+
+---
+
+## Data Sources
+
+| Source | Data | License |
+|---|---|---|
+| [OpenSky Network](https://opensky-network.org) | Live flight states | Free tier, requires account |
+| [OurAirports](https://ourairports.com) | Airport database | Public domain |
+| [airportdb.io](https://airportdb.io) | Runway details | Free |
+| [Open-Meteo](https://open-meteo.com) | Airport weather | Free, no key required |
+| [NOAA METAR](https://tgftp.nws.noaa.gov) | METAR strings | Public domain |
+| [hexdb.io](https://hexdb.io) | Aircraft registration/type | Free |
+| [Planespotters.net](https://www.planespotters.net) | Aircraft photos | Free |
+| [Wikipedia](https://en.wikipedia.org) | Airport descriptions/images | CC BY-SA |
