@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 're
 import L from 'leaflet'
 import 'leaflet.markercluster'
 import { makePlaneIcon, makeEmergencyIcon, makeSelectedIcon, AIRPORT_ICON, altBucket, altColor } from '../utils/icons'
+import { getCachedType } from '../utils/aircraftTypes'
 import { TILE_LAYERS, EMERGENCY_SQUAWKS } from '../utils/constants'
 import { AirportPopup } from './Popups'
 
@@ -63,7 +64,7 @@ function TrackLayer({ track }) {
 function FlightLayer({ flights, onSelect }) {
   const map        = useMap()
   const clusterRef = useRef(null)
-  const markersRef = useRef(new Map()) // icao24 → { marker, flight, prevHb, prevSq, prevAb }
+  const markersRef = useRef(new Map()) // icao24 → { marker, flight, prevHb, prevSq, prevAb, prevCat }
   const onSelRef   = useRef(onSelect)
   const flightsRef = useRef(flights)
   onSelRef.current   = onSelect
@@ -123,22 +124,23 @@ function FlightLayer({ flights, onSelect }) {
     // 3. Update existing / create new
     const toAdd = []
     for (const [id, f] of wanted) {
-      const isEmg = Boolean(EMERGENCY_SQUAWKS[String(f.squawk)])
-      const newHb = Math.round((f.heading ?? 0) / 10) * 10
-      const newAb = altBucket(f.alt)
-      const e     = existing.get(id)
+      const isEmg  = Boolean(EMERGENCY_SQUAWKS[String(f.squawk)])
+      const newHb  = Math.round((f.heading ?? 0) / 10) * 10
+      const newAb  = altBucket(f.alt)
+      const newCat = getCachedType(id)   // 'default' if not yet known
+      const e      = existing.get(id)
 
       if (e) {
         if (moverSet.has(e.marker)) { e.marker.setLatLng([f.lat, f.lon]); toAdd.push(e.marker) }
-        if (newHb !== e.prevHb || String(f.squawk) !== e.prevSq || newAb !== e.prevAb) {
-          e.marker.setIcon(isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt))
-          e.prevHb = newHb; e.prevSq = String(f.squawk); e.prevAb = newAb
+        if (newHb !== e.prevHb || String(f.squawk) !== e.prevSq || newAb !== e.prevAb || newCat !== e.prevCat) {
+          e.marker.setIcon(isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt, newCat))
+          e.prevHb = newHb; e.prevSq = String(f.squawk); e.prevAb = newAb; e.prevCat = newCat
         }
         e.flight = f
       } else {
-        const icon   = isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt)
+        const icon   = isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt, newCat)
         const marker = L.marker([f.lat, f.lon], { icon })
-        const entry  = { marker, flight: f, prevHb: newHb, prevSq: String(f.squawk), prevAb: newAb }
+        const entry  = { marker, flight: f, prevHb: newHb, prevSq: String(f.squawk), prevAb: newAb, prevCat: newCat }
         marker.on('click', ev => { L.DomEvent.stopPropagation(ev); onSelRef.current(entry.flight) })
         existing.set(id, entry)
         toAdd.push(marker)

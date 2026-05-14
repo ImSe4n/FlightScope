@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { EMERGENCY_SQUAWKS, SOURCE_TYPES } from '../utils/constants'
 import AircraftPhoto from './AircraftPhoto'
 import { useAircraftInfo, useRoute, useFlightHistory, useFlightStatus } from '../hooks/useFlights'
+import { setCachedType } from '../utils/aircraftTypes'
 
 const ft  = v => v != null ? Math.round(v * 3.28084).toLocaleString() : '—'
 const kt  = v => v != null ? Math.round(v * 1.94384).toString()       : '—'
@@ -94,6 +96,12 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
   const history      = useFlightHistory(f.icao24)
   const flightStatus = useFlightStatus(callsign)
 
+  // When aircraft type is known, write to the shared cache so FlightLayer
+  // can update this marker's icon on the next sync.
+  useEffect(() => {
+    if (acInfo?.ICAOTypeCode) setCachedType(f.icao24, acInfo.ICAOTypeCode)
+  }, [acInfo, f.icao24])
+
   const copy = text => navigator.clipboard?.writeText(text).catch(() => {})
 
   // AeroDataBox ISO time → HH:MM tz (e.g. "2024-05-14 16:35+02:00")
@@ -179,7 +187,7 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
               title={fromInfo ? `${fromInfo.name}${fromInfo.city ? ` · ${fromInfo.city}` : ''}` : undefined}
               disabled={!fromInfo || !onAirportSelect}
             >
-              <span className="fd-rte-icao">{fromIcao ?? '????'}</span>
+              <span className="fd-rte-icao">{fromIcao ?? '—'}</span>
               <span className="fd-rte-role">DEP</span>
               {depTimeDisplay && <span className="fd-rte-time">{depTimeDisplay}</span>}
               {(depTerminal || depGate) && (
@@ -203,7 +211,7 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
               title={toInfo ? `${toInfo.name}${toInfo.city ? ` · ${toInfo.city}` : ''}` : undefined}
               disabled={!toInfo || !onAirportSelect}
             >
-              <span className="fd-rte-icao">{toIcao ?? '????'}</span>
+              <span className="fd-rte-icao">{toIcao ?? '—'}</span>
               <span className="fd-rte-role">ARR</span>
               {arrTimeDisplay && <span className="fd-rte-time">{arrTimeDisplay}</span>}
               {(arrTerminal || arrGate) && (

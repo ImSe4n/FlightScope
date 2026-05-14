@@ -631,6 +631,11 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
   user-select: none;
   transition: none;
 }
+.plane-icon--svg {
+  font-size: 0; line-height: 0;
+}
+.plane-icon--svg svg { display: block; }
+
 .plane-icon--sel {
   font-size: 22px;
   color: var(--orange) !important;

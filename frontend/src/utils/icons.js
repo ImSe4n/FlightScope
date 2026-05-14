@@ -15,20 +15,87 @@ export function altColor(alt) {
   return ['#7c93af', '#4ade80', '#38bdf8', '#a78bfa', '#f0f4f8'][b]
 }
 
-// Cache keyed by heading-bucket (10°) × altitude-bucket (5) = max 180 entries
+// ── Aircraft silhouette SVGs ──────────────────────────────────────────────────
+// All icons point RIGHT (→) by default, matching the ✈ emoji, so existing
+// heading rotation (hb - 90) still works identically.
+// Coordinate system: nose at +x, wings at ±y, tail at -x.
+
+const _SVG = {
+  // 4-engine heavy (A380 / 747): extra-wide wings, 4 engine pods
+  heavy4: `<svg width="28" height="18" viewBox="-16 -9 32 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="0" cy="0" rx="13" ry="2.4"/>
+    <path d="M0-2.4L-14-9L-16-9L-4 2.4Z"/>
+    <path d="M0 2.4L-14 9L-16 9L-4-2.4Z"/>
+    <ellipse cx="-5.5" cy="-6.5" rx="2.6" ry="1.1"/>
+    <ellipse cx="-9.5" cy="-7.8" rx="2.2" ry="1"/>
+    <ellipse cx="-5.5" cy="6.5" rx="2.6" ry="1.1"/>
+    <ellipse cx="-9.5" cy="7.8" rx="2.2" ry="1"/>
+    <path d="M-12-2.4L-15.5-5.5L-16-5.5L-13 2.4Z"/>
+    <path d="M-12 2.4L-15.5 5.5L-16 5.5L-13-2.4Z"/>
+  </svg>`,
+
+  // Wide-body twin (777 / A330 / 787 / A350): wide wings, 2 large engines
+  widebody: `<svg width="24" height="15" viewBox="-14 -7.5 28 15" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="0" cy="0" rx="12" ry="2"/>
+    <path d="M0-2L-12-7.5L-14-7.5L-4 2Z"/>
+    <path d="M0 2L-12 7.5L-14 7.5L-4-2Z"/>
+    <ellipse cx="-8" cy="-5.8" rx="2.8" ry="1.2"/>
+    <ellipse cx="-8" cy="5.8" rx="2.8" ry="1.2"/>
+    <path d="M-11-2L-14-4.8L-14.5-4.8L-12 2Z"/>
+    <path d="M-11 2L-14 4.8L-14.5 4.8L-12-2Z"/>
+  </svg>`,
+
+  // Narrow-body (737 / A320): standard swept wings, 2 engines
+  narrowbody: `<svg width="20" height="13" viewBox="-13 -6.5 26 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="0" cy="0" rx="11" ry="1.8"/>
+    <path d="M0-1.8L-10-6.5L-12-6.5L-3 1.8Z"/>
+    <path d="M0 1.8L-10 6.5L-12 6.5L-3-1.8Z"/>
+    <ellipse cx="-7" cy="-5" rx="2.3" ry="1"/>
+    <ellipse cx="-7" cy="5" rx="2.3" ry="1"/>
+    <path d="M-9-1.8L-12-4L-13-4L-10 1.8Z"/>
+    <path d="M-9 1.8L-12 4L-13 4L-10-1.8Z"/>
+  </svg>`,
+
+  // Regional jet / turboprop (CRJ / E-jets / ATR): slim, shorter wingspan
+  regional: `<svg width="16" height="10" viewBox="-11 -5 22 10" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="0" cy="0" rx="9" ry="1.5"/>
+    <path d="M0-1.5L-8-5L-10-5L-3 1.5Z"/>
+    <path d="M0 1.5L-8 5L-10 5L-3-1.5Z"/>
+    <ellipse cx="-5.5" cy="-4" rx="1.8" ry="0.85"/>
+    <ellipse cx="-5.5" cy="4" rx="1.8" ry="0.85"/>
+    <path d="M-7-1.5L-10-3.3L-11-3.3L-8 1.5Z"/>
+    <path d="M-7 1.5L-10 3.3L-11 3.3L-8-1.5Z"/>
+  </svg>`,
+}
+
+const _SIZE = {
+  heavy4:     { iconSize: [28, 18], iconAnchor: [14, 9]   },
+  widebody:   { iconSize: [24, 15], iconAnchor: [12, 7.5] },
+  narrowbody: { iconSize: [20, 13], iconAnchor: [10, 6.5] },
+  regional:   { iconSize: [16, 10], iconAnchor: [8,  5]   },
+  default:    { iconSize: [20, 20], iconAnchor: [10, 10]  },
+}
+
+// Cache keyed by heading-bucket × altitude-bucket × category = max 900 entries
 const _cache = {}
-export function makePlaneIcon(heading, alt) {
+
+export function makePlaneIcon(heading, alt, category = 'default') {
   const hb  = Math.round((heading ?? 0) / 10) * 10
   const ab  = altBucket(alt)
-  const key = `${hb}_${ab}`
+  const cat = _SVG[category] ? category : 'default'
+  const key = `${hb}_${ab}_${cat}`
   if (!_cache[key]) {
-    const col = altColor(alt)
+    const col   = altColor(alt)
+    const sizes = _SIZE[cat]
+    const html  = cat === 'default'
+      ? `<span class="plane-icon" style="--r:${hb - 90}deg;color:${col}">✈</span>`
+      : `<span class="plane-icon plane-icon--svg" style="--r:${hb - 90}deg;color:${col}">${_SVG[cat]}</span>`
     _cache[key] = L.divIcon({
-      html: `<span class="plane-icon" style="--r:${hb - 90}deg;color:${col}">✈</span>`,
-      className: '',
-      iconSize:   [20, 20],
-      iconAnchor: [10, 10],
-      popupAnchor:[0, -12],
+      html,
+      className:   '',
+      iconSize:    sizes.iconSize,
+      iconAnchor:  sizes.iconAnchor,
+      popupAnchor: [0, -12],
     })
   }
   return _cache[key]
