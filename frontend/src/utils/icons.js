@@ -10,7 +10,7 @@ export function altBucket(alt) {
   return 4                      // very high
 }
 
-function altColor(alt) {
+export function altColor(alt) {
   const b = altBucket(alt)
   return ['#7c93af', '#4ade80', '#38bdf8', '#a78bfa', '#f0f4f8'][b]
 }

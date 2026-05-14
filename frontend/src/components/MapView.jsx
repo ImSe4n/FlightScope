@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState, useMemo, memo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet.markercluster'
-import { makePlaneIcon, makeEmergencyIcon, makeSelectedIcon, AIRPORT_ICON, altBucket } from '../utils/icons'
+import { makePlaneIcon, makeEmergencyIcon, makeSelectedIcon, AIRPORT_ICON, altBucket, altColor } from '../utils/icons'
 import { TILE_LAYERS, EMERGENCY_SQUAWKS } from '../utils/constants'
 import { AirportPopup } from './Popups'
 
@@ -25,20 +25,32 @@ function MapClickHandler({ onDeselect }) {
   return null
 }
 
-// ── Flight path polyline ──────────────────────────────────────────────────────
+// ── Flight path — one segment per point pair, coloured by altitude ────────────
 function TrackLayer({ track }) {
-  const map     = useMap()
-  const polyRef = useRef(null)
+  const map      = useMap()
+  const segsRef  = useRef([])
 
   useEffect(() => {
-    if (polyRef.current) { map.removeLayer(polyRef.current); polyRef.current = null }
+    segsRef.current.forEach(s => map.removeLayer(s))
+    segsRef.current = []
     if (!track || track.length < 2) return
-    const pts = track.filter(p => p[1] != null && p[2] != null).map(p => [p[1], p[2]])
-    if (pts.length < 2) return
-    const poly = L.polyline(pts, { color: '#38bdf8', weight: 2, opacity: 0.7, dashArray: '6 5' })
-    map.addLayer(poly)
-    polyRef.current = poly
-    return () => { if (polyRef.current) { map.removeLayer(polyRef.current); polyRef.current = null } }
+
+    const valid = track.filter(p => p[1] != null && p[2] != null)
+    if (valid.length < 2) return
+
+    for (let i = 0; i < valid.length - 1; i++) {
+      const [, lat1, lon1, alt1] = valid[i]
+      const [, lat2, lon2]       = valid[i + 1]
+      const seg = L.polyline([[lat1, lon1], [lat2, lon2]], {
+        color:   altColor(alt1),   // alt1 is already in metres — matches altBucket thresholds
+        weight:  3,
+        opacity: 0.85,
+      })
+      seg.addTo(map)
+      segsRef.current.push(seg)
+    }
+
+    return () => { segsRef.current.forEach(s => map.removeLayer(s)); segsRef.current = [] }
   }, [track, map])
 
   return null

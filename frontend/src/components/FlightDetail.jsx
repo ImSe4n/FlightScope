@@ -146,12 +146,11 @@ export default function FlightDetail({ flight: f, onClose, airports, track }) {
         </div>
       </div>
 
-      {/* ── Route card ──────────────────────────────────────────────────── */}
-      {(fromIcao || toIcao) && (
-        <div className="fd-card">
-          <div className="fd-card-label">Route</div>
+      {/* ── Route card — always shown, placeholders when data pending ───── */}
+      <div className="fd-card">
+        <div className="fd-card-label">Route</div>
+        {(fromIcao || toIcao) ? (
           <div className="fd-route">
-            {/* Departure */}
             <div className="fd-route-end">
               <div className="fd-route-icao">{fromIcao ?? '????'}</div>
               {fromInfo && <div className="fd-route-airport">{fromInfo.name}</div>}
@@ -159,15 +158,11 @@ export default function FlightDetail({ flight: f, onClose, airports, track }) {
               <div className="fd-route-role">Departure</div>
               {depTime && <div className="fd-route-time">{hhmm(depTime)}</div>}
             </div>
-
-            {/* Arrow */}
             <div className="fd-route-mid">
               <div className="fd-route-dash" />
               <span className="fd-route-plane">✈</span>
               <div className="fd-route-dash" />
             </div>
-
-            {/* Arrival */}
             <div className="fd-route-end fd-route-end--right">
               <div className="fd-route-icao">{toIcao ?? '????'}</div>
               {toInfo && <div className="fd-route-airport">{toInfo.name}</div>}
@@ -176,14 +171,15 @@ export default function FlightDetail({ flight: f, onClose, airports, track }) {
               {arrTime && <div className="fd-route-time">{hhmm(arrTime)}</div>}
             </div>
           </div>
-
-          {route?.operatorCode && (
-            <div className="fd-route-op">Operator: {route.operatorCode}
-              {route.flightNumber ? ` · Flight ${route.flightNumber}` : ''}
-            </div>
-          )}
-        </div>
-      )}
+        ) : (
+          <div className="fd-route-none">No route data for this aircraft</div>
+        )}
+        {route?.operatorCode && (
+          <div className="fd-route-op">Operator: {route.operatorCode}
+            {route.flightNumber ? ` · Flight ${route.flightNumber}` : ''}
+          </div>
+        )}
+      </div>
 
       {/* ── Altitude profile ─────────────────────────────────────────────── */}
       <AltitudeProfile track={track} />

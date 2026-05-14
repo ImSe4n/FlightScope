@@ -742,6 +742,7 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 .fd-route-dash  { flex: 1; height: 1px; background: var(--border-h); width: 16px; }
 .fd-route-plane { font-size: 13px; color: var(--txt-2); }
 .fd-route-op    { font-size: 10px; color: var(--txt-3); margin-top: 7px; }
+.fd-route-none  { font-size: 11px; color: var(--txt-3); font-style: italic; padding: 4px 0; }
 
 /* ── Altitude profile chart ──────────────────────────────────────────────── */
 .alt-profile-svg { display: block; overflow: visible; }

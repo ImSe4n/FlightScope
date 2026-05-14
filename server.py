@@ -404,7 +404,7 @@ def get_route(callsign: str):
     try:
         r = requests.get(
             f"https://opensky-network.org/api/routes?callsign={callsign.strip().upper()}",
-            timeout=8)
+            timeout=8, headers=_opensky_tokens.headers())
         return r.json() if r.ok else {}
     except Exception:
         return {}
@@ -417,7 +417,7 @@ def get_flight_history(icao24: str):
         r = requests.get(
             "https://opensky-network.org/api/flights/aircraft",
             params={"icao24": icao24.lower(), "begin": end - 86400, "end": end},
-            timeout=10)
+            timeout=10, headers=_opensky_tokens.headers())
         if r.ok:
             data = r.json() or []
             return {"flights": data, "latest": data[-1] if data else None}
