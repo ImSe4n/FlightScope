@@ -7,6 +7,7 @@ Description: FastAPI backend – live flights, global airports, aircraft & route
 import io
 import math
 import os
+import re
 import time
 from datetime import datetime, timedelta
 from urllib.parse import quote as urlquote
@@ -37,7 +38,8 @@ FLIGHT_COLUMNS = [
     'vertRate', 'sensors', 'geoAlt', 'squawk', 'spi', 'source',
 ]
 
-AIRPORT_API_TOKEN = '89e420818cba11453f8c0d69dd06e6a075288321eb34723d17fadf678cde51f575dd81b6245e01cf77f26831dd973895'
+AIRPORT_API_TOKEN  = '89e420818cba11453f8c0d69dd06e6a075288321eb34723d17fadf678cde51f575dd81b6245e01cf77f26831dd973895'
+AERODATABOX_KEY    = os.getenv("AERODATABOX_KEY", "")
 
 # Tier-1 airports shown at all zoom levels — the ~60 most recognisable global hubs
 TIER1_IATA = {
@@ -276,20 +278,80 @@ def _wiki_fetch(name):
 def _weather_fetch(lat, lon):
     try:
         r = requests.get("https://api.open-meteo.com/v1/forecast", params={
-            "latitude": lat, "longitude": lon,
-            "current_weather": "true", "wind_speed_unit": "kn",
+            "latitude":        lat,
+            "longitude":       lon,
+            "current_weather": "true",
+            "hourly":          "temperature_2m,wind_speed_10m,wind_direction_10m,weather_code",
+            "wind_speed_unit": "kn",
+            "timezone":        "UTC",
+            "forecast_days":   1,
         }, timeout=6)
         if not r.ok:
             return None
-        cw = r.json().get("current_weather", {})
+        d    = r.json()
+        cw   = d.get("current_weather", {})
+        hrly = d.get("hourly", {})
+
+        times   = hrly.get("time",                [])
+        temps   = hrly.get("temperature_2m",      [])
+        wspeeds = hrly.get("wind_speed_10m",      [])
+        wdirs   = hrly.get("wind_direction_10m",  [])
+        wxcodes = hrly.get("weather_code",        [])
+
+        # 6-hour window centred on now (UTC)
+        now_h   = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+        start_s = (now_h - timedelta(hours=2)).strftime("%Y-%m-%dT%H:00")
+        end_s   = (now_h + timedelta(hours=3)).strftime("%Y-%m-%dT%H:00")
+
+        hourly = []
+        for i, t in enumerate(times):
+            if start_s <= t <= end_s:
+                hourly.append({
+                    "time":      t,
+                    "temp":      temps[i]   if i < len(temps)   else None,
+                    "windspeed": wspeeds[i] if i < len(wspeeds) else None,
+                    "winddir":   wdirs[i]   if i < len(wdirs)   else None,
+                    "wxcode":    wxcodes[i] if i < len(wxcodes) else None,
+                })
+
         return {
             "temperature":   cw.get("temperature"),
             "windspeed":     cw.get("windspeed"),
             "winddirection": cw.get("winddirection"),
             "weathercode":   cw.get("weathercode"),
+            "hourly":        hourly,
         }
     except Exception:
         return None
+
+
+def _parse_metar_wind(metar: str | None):
+    """Return (wind_dir_deg, speed_kt) from raw METAR string, or (None, None)."""
+    if not metar:
+        return None, None
+    m = re.search(r'\b(VRB|\d{3})(\d{2,3})(?:G\d{2,3})?KT\b', metar)
+    if not m:
+        return None, None
+    dir_s, spd_s = m.group(1), m.group(2)
+    return (None, int(spd_s)) if dir_s == "VRB" else (int(dir_s), int(spd_s))
+
+
+def _predict_runway(runways: list, wind_dir) -> str | None:
+    """Return the predicted active-runway ident (e.g. '27L') from wind direction.
+    Aircraft land into the wind, so active runway heading ≈ wind direction."""
+    if wind_dir is None or not runways:
+        return None
+    best_ident, best_diff = None, 360
+    for rw in runways:
+        for hdg_key, id_key in [("le_heading_degT", "le_ident"), ("he_heading_degT", "he_ident")]:
+            try:
+                hdg  = float(rw[hdg_key])
+                diff = abs((hdg - wind_dir + 180) % 360 - 180)
+                if diff < best_diff:
+                    best_diff, best_ident = diff, rw.get(id_key)
+            except (KeyError, TypeError, ValueError):
+                pass
+    return best_ident
 
 
 def _metar_fetch(ident):
@@ -316,19 +378,26 @@ def _build_detail(ident, lat, lon, name):
             f_adb.result(), f_wiki.result(), f_weather.result(), f_metar.result()
         )
 
+    runways     = adb.get("runways", [])
+    wind_dir, wind_spd = _parse_metar_wind(metar)
+    pred_rw     = _predict_runway(runways, wind_dir)
+
     detail = {
-        "ident":        ident,
-        "name":         adb.get("name") or name,
-        "lat":          lat,
-        "lon":          lon,
-        "runways":      adb.get("runways", []),
-        "iata":         adb.get("iata_code") or None,
-        "type":         adb.get("type") or None,
-        "city":         adb.get("municipality") or None,
-        "country":      adb.get("iso_country") or None,
-        "elevation_ft": adb.get("elevation_ft"),
-        "weather":      weather,
-        "metar":        metar or "N/A",
+        "ident":           ident,
+        "name":            adb.get("name") or name,
+        "lat":             lat,
+        "lon":             lon,
+        "runways":         runways,
+        "iata":            adb.get("iata_code") or None,
+        "type":            adb.get("type") or None,
+        "city":            adb.get("municipality") or None,
+        "country":         adb.get("iso_country") or None,
+        "elevation_ft":    adb.get("elevation_ft"),
+        "weather":         weather,
+        "metar":           metar or "N/A",
+        "metarWindDir":    wind_dir,
+        "metarWindSpd":    wind_spd,
+        "predictedRunway": pred_rw,
     }
     detail.update(wiki)   # image, description, wiki_url
     return detail
@@ -470,6 +539,57 @@ def get_airport_detail(ident: str):
     lon  = float(row["longitude_deg"])
     name = str(row.get("name", ident))
     return _build_detail(ident, lat, lon, name)
+
+
+@app.get("/api/flight-status/{callsign}")
+def get_flight_status(callsign: str):
+    """Gate, terminal, and live status from AeroDataBox (optional).
+    Set AERODATABOX_KEY in .env to enable — free tier available at rapidapi.com."""
+    if not AERODATABOX_KEY:
+        return {"error": "no_key"}
+    cs = callsign.strip().upper()
+    try:
+        r = requests.get(
+            f"https://aerodatabox.p.rapidapi.com/flights/callsign/{cs}",
+            headers={
+                "X-RapidAPI-Key":  AERODATABOX_KEY,
+                "X-RapidAPI-Host": "aerodatabox.p.rapidapi.com",
+            },
+            timeout=8,
+        )
+        if not r.ok:
+            print(f"[aerodatabox] {cs}: HTTP {r.status_code}")
+            return {}
+        items = r.json()
+        if not isinstance(items, list):
+            items = [items]
+        if not items:
+            return {}
+        fl  = items[0]
+        dep = fl.get("departure") or {}
+        arr = fl.get("arrival")   or {}
+        return {
+            "status": fl.get("status"),
+            "number": fl.get("number"),
+            "departure": {
+                "airport":   (dep.get("airport") or {}).get("icao"),
+                "terminal":  dep.get("terminal"),
+                "gate":      dep.get("gate"),
+                "runway":    dep.get("runway"),
+                "scheduled": (dep.get("scheduledTime") or {}).get("local"),
+                "actual":    (dep.get("actualTime")    or {}).get("local"),
+            },
+            "arrival": {
+                "airport":   (arr.get("airport") or {}).get("icao"),
+                "terminal":  arr.get("terminal"),
+                "gate":      arr.get("gate"),
+                "scheduled": (arr.get("scheduledTime")  or {}).get("local"),
+                "estimated": (arr.get("predictedTime")  or {}).get("local"),
+            },
+        }
+    except Exception as exc:
+        print(f"[aerodatabox] {cs}: {exc}")
+        return {}
 
 
 # ── Serve React build in production ───────────────────────────────────────────

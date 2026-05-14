@@ -1,6 +1,6 @@
 import { EMERGENCY_SQUAWKS, SOURCE_TYPES } from '../utils/constants'
 import AircraftPhoto from './AircraftPhoto'
-import { useAircraftInfo, useRoute, useFlightHistory } from '../hooks/useFlights'
+import { useAircraftInfo, useRoute, useFlightHistory, useFlightStatus } from '../hooks/useFlights'
 
 const ft  = v => v != null ? Math.round(v * 3.28084).toLocaleString() : '—'
 const kt  = v => v != null ? Math.round(v * 1.94384).toString()       : '—'
@@ -82,25 +82,43 @@ function AltitudeProfile({ track }) {
   )
 }
 
-export default function FlightDetail({ flight: f, onClose, airports, track }) {
+export default function FlightDetail({ flight: f, onClose, airports, track, onAirportSelect }) {
   const sq        = String(f.squawk)
   const emergency = EMERGENCY_SQUAWKS[sq]
   const source    = SOURCE_TYPES[f.source] ?? 'Unknown'
   const callsign  = f.callsign?.trim()
 
   // Parallel data fetches — all independent, all start immediately
-  const acInfo  = useAircraftInfo(f.icao24)
-  const route   = useRoute(callsign)
-  const history = useFlightHistory(f.icao24)
+  const acInfo       = useAircraftInfo(f.icao24)
+  const route        = useRoute(callsign)
+  const history      = useFlightHistory(f.icao24)
+  const flightStatus = useFlightStatus(callsign)
 
   const copy = text => navigator.clipboard?.writeText(text).catch(() => {})
+
+  // AeroDataBox ISO time → HH:MM tz (e.g. "2024-05-14 16:35+02:00")
+  const fmtIso = s => {
+    if (!s) return null
+    try { return new Date(s.replace(' ', 'T')).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }) }
+    catch { return s }
+  }
 
   // Merge route (scheduled) with history (actual) — prefer scheduled
   const latest   = history?.latest
   const fromIcao = route?.route?.[0]                    ?? latest?.estDepartureAirport
   const toIcao   = route?.route?.[route.route.length-1] ?? latest?.estArrivalAirport
-  const depTime  = latest?.firstSeen
-  const arrTime  = latest?.lastSeen
+
+  // Prefer AeroDataBox times when available (more precise), fall back to OpenSky history
+  const depTime  = flightStatus?.departure?.actual   ?? flightStatus?.departure?.scheduled   ?? (latest?.firstSeen ? hhmm(latest.firstSeen) : null)
+  const arrTime  = flightStatus?.arrival?.estimated  ?? flightStatus?.arrival?.scheduled     ?? (latest?.lastSeen  ? hhmm(latest.lastSeen)  : null)
+  const depTimeDisplay = flightStatus ? fmtIso(depTime) : (latest?.firstSeen ? hhmm(latest.firstSeen) : null)
+  const arrTimeDisplay = flightStatus ? fmtIso(arrTime) : (latest?.lastSeen  ? hhmm(latest.lastSeen)  : null)
+
+  const depTerminal = flightStatus?.departure?.terminal
+  const depGate     = flightStatus?.departure?.gate
+  const arrTerminal = flightStatus?.arrival?.terminal
+  const arrGate     = flightStatus?.arrival?.gate
+  const fltStatus   = flightStatus?.status
 
   const fromInfo = airportMeta(airports, fromIcao)
   const toInfo   = airportMeta(airports, toIcao)
@@ -146,30 +164,54 @@ export default function FlightDetail({ flight: f, onClose, airports, track }) {
         </div>
       </div>
 
-      {/* ── Route card — always shown, placeholders when data pending ───── */}
+      {/* ── Route card — compact ICAO codes, click to fly to airport ───── */}
       <div className="fd-card">
-        <div className="fd-card-label">Route</div>
+        <div className="fd-card-label">
+          Route
+          {fltStatus && <span className="fd-flight-status">{fltStatus}</span>}
+        </div>
         {(fromIcao || toIcao) ? (
-          <div className="fd-route">
-            <div className="fd-route-end">
-              <div className="fd-route-icao">{fromIcao ?? '????'}</div>
-              {fromInfo && <div className="fd-route-airport">{fromInfo.name}</div>}
-              {fromInfo?.city && <div className="fd-route-city">{fromInfo.city}{fromInfo.country ? ` · ${fromInfo.country}` : ''}</div>}
-              <div className="fd-route-role">Departure</div>
-              {depTime && <div className="fd-route-time">{hhmm(depTime)}</div>}
+          <div className="fd-rte-row">
+            {/* Departure */}
+            <button
+              className={`fd-rte-node${fromInfo && onAirportSelect ? ' fd-rte-node--link' : ''}`}
+              onClick={fromInfo && onAirportSelect ? () => onAirportSelect(fromInfo) : undefined}
+              title={fromInfo ? `${fromInfo.name}${fromInfo.city ? ` · ${fromInfo.city}` : ''}` : undefined}
+              disabled={!fromInfo || !onAirportSelect}
+            >
+              <span className="fd-rte-icao">{fromIcao ?? '????'}</span>
+              <span className="fd-rte-role">DEP</span>
+              {depTimeDisplay && <span className="fd-rte-time">{depTimeDisplay}</span>}
+              {(depTerminal || depGate) && (
+                <span className="fd-rte-gate">
+                  {[depTerminal && `T${depTerminal}`, depGate && `G${depGate}`].filter(Boolean).join(' · ')}
+                </span>
+              )}
+            </button>
+
+            {/* Connector arrow */}
+            <div className="fd-rte-line">
+              <div className="fd-rte-dash" />
+              <span className="fd-rte-icon">✈</span>
+              <div className="fd-rte-dash" />
             </div>
-            <div className="fd-route-mid">
-              <div className="fd-route-dash" />
-              <span className="fd-route-plane">✈</span>
-              <div className="fd-route-dash" />
-            </div>
-            <div className="fd-route-end fd-route-end--right">
-              <div className="fd-route-icao">{toIcao ?? '????'}</div>
-              {toInfo && <div className="fd-route-airport">{toInfo.name}</div>}
-              {toInfo?.city && <div className="fd-route-city">{toInfo.city}{toInfo.country ? ` · ${toInfo.country}` : ''}</div>}
-              <div className="fd-route-role">Arrival</div>
-              {arrTime && <div className="fd-route-time">{hhmm(arrTime)}</div>}
-            </div>
+
+            {/* Arrival */}
+            <button
+              className={`fd-rte-node fd-rte-node--right${toInfo && onAirportSelect ? ' fd-rte-node--link' : ''}`}
+              onClick={toInfo && onAirportSelect ? () => onAirportSelect(toInfo) : undefined}
+              title={toInfo ? `${toInfo.name}${toInfo.city ? ` · ${toInfo.city}` : ''}` : undefined}
+              disabled={!toInfo || !onAirportSelect}
+            >
+              <span className="fd-rte-icao">{toIcao ?? '????'}</span>
+              <span className="fd-rte-role">ARR</span>
+              {arrTimeDisplay && <span className="fd-rte-time">{arrTimeDisplay}</span>}
+              {(arrTerminal || arrGate) && (
+                <span className="fd-rte-gate">
+                  {[arrTerminal && `T${arrTerminal}`, arrGate && `G${arrGate}`].filter(Boolean).join(' · ')}
+                </span>
+              )}
+            </button>
           </div>
         ) : (
           <div className="fd-route-none">No route data for this aircraft</div>

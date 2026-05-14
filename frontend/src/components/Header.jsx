@@ -1,31 +1,84 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { TILE_LAYERS } from '../utils/constants'
 
-// Debounced search — displays immediately in the input, but only propagates to the
-// parent after 200 ms of inactivity, avoiding a full 8 000-flight filter on every keystroke.
-function SearchBox({ query, onQueryChange }) {
+function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, onAirportSelect }) {
   const [local, setLocal] = useState(query)
+  const [open,  setOpen]  = useState(false)
 
-  // Sync if parent clears the query (e.g. "Clear all filters")
   useEffect(() => { setLocal(query) }, [query])
 
-  // Debounce: propagate 200 ms after the user stops typing
+  // Debounce propagation to the filter list
   useEffect(() => {
     const id = setTimeout(() => { if (local !== query) onQueryChange(local) }, 200)
     return () => clearTimeout(id)
-  }, [local])  // intentionally omits query/onQueryChange — only fires on local change
+  }, [local])
+
+  const q = local.trim().toLowerCase()
+  const showDrop = open && q.length >= 2
+
+  const matchAirports = useMemo(() => {
+    if (!showDrop) return []
+    return airports.filter(a =>
+      a.iata?.toLowerCase().startsWith(q) ||
+      a.ident?.toLowerCase().startsWith(q) ||
+      a.name?.toLowerCase().includes(q) ||
+      a.city?.toLowerCase().includes(q)
+    ).slice(0, 5)
+  }, [airports, q, showDrop])
+
+  const matchFlights = useMemo(() => {
+    if (!showDrop) return []
+    return flights.filter(f =>
+      f.callsign?.trim().toLowerCase().startsWith(q) ||
+      f.icao24?.toLowerCase().startsWith(q)
+    ).slice(0, 5)
+  }, [flights, q, showDrop])
+
+  const clear = () => { setLocal(''); onQueryChange(''); setOpen(false) }
+
+  const hasResults = matchAirports.length > 0 || matchFlights.length > 0
 
   return (
     <div className="search-wrap">
       <span className="search-icon">⌕</span>
       <input
         className="search-input"
-        placeholder="Callsign · ICAO24 · Country · Squawk…"
+        placeholder="Search flights, airports, callsigns…"
         value={local}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
         onChange={e => setLocal(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Escape') clear() }}
       />
-      {local && (
-        <button className="search-clear" onClick={() => { setLocal(''); onQueryChange('') }}>✕</button>
+      {local && <button className="search-clear" onClick={clear}>✕</button>}
+
+      {showDrop && hasResults && (
+        <div className="search-dropdown">
+          {matchAirports.length > 0 && (
+            <>
+              <div className="search-drop-section">Airports</div>
+              {matchAirports.map(a => (
+                <div key={a.ident} className="search-drop-item" onMouseDown={() => { onAirportSelect(a); setOpen(false) }}>
+                  <span className="search-drop-code">{a.iata || a.ident}</span>
+                  <span className="search-drop-name">{a.name}</span>
+                  {a.city && <span className="search-drop-city">{a.city}{a.country ? ` · ${a.country}` : ''}</span>}
+                </div>
+              ))}
+            </>
+          )}
+          {matchFlights.length > 0 && (
+            <>
+              <div className="search-drop-section">Flights</div>
+              {matchFlights.map(f => (
+                <div key={f.icao24} className="search-drop-item" onMouseDown={() => { onFlightSelect(f); clear() }}>
+                  <span className="search-drop-code">{(f.callsign || f.icao24 || '').trim()}</span>
+                  <span className="search-drop-name">{f.icao24?.toUpperCase()}</span>
+                  {f.origin && <span className="search-drop-city">{f.origin}</span>}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       )}
     </div>
   )
@@ -35,6 +88,7 @@ export default function Header({
   query, onQueryChange,
   stats, error,
   mapLayer, onLayerChange,
+  flights, airports, onFlightSelect, onAirportSelect,
 }) {
   return (
     <header className="header">
@@ -52,7 +106,14 @@ export default function Header({
 
       <div className="header-sep" />
 
-      <SearchBox query={query} onQueryChange={onQueryChange} />
+      <SearchBox
+        query={query}
+        onQueryChange={onQueryChange}
+        flights={flights}
+        airports={airports}
+        onFlightSelect={onFlightSelect}
+        onAirportSelect={onAirportSelect}
+      />
 
       <div className="header-right">
         {error ? (
@@ -81,7 +142,6 @@ export default function Header({
             </button>
           ))}
         </div>
-
       </div>
     </header>
   )

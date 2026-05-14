@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useTransition, memo } from 'react'
+import { useState, useEffect, useMemo, useTransition, useCallback, memo } from 'react'
 import { useFlights, useAirports, useTrack } from './hooks/useFlights'
 import Header   from './components/Header'
 import Sidebar  from './components/Sidebar'
@@ -10,6 +10,7 @@ const DEFAULT_FILTERS = {
   hideGround:    false,
   emergencyOnly: false,
   country:       '',
+  airline:       '',
   source:        '',
   minAlt:        '',
   maxAlt:        '',
@@ -17,19 +18,21 @@ const DEFAULT_FILTERS = {
   maxSpeed:      '',
 }
 
-// Memo-wrap heavy components so they only re-render when their own props change.
-// Sidebar only needs to re-render when selected / filters / flight count changes —
-// NOT on every flight position tick.
+// Extract 3-letter ICAO airline code from callsign (e.g. "BAW123" → "BAW")
+const airlineOf = cs => cs?.trim().toUpperCase().match(/^([A-Z]{3})\d/)?.[1] ?? null
+
 const MemoSidebar = memo(Sidebar, (prev, next) =>
-  prev.selected      === next.selected      &&
-  prev.filters       === next.filters       &&
-  prev.hasFilters    === next.hasFilters    &&
-  prev.flights       === next.flights       &&
-  prev.totalFlights  === next.totalFlights  &&
-  prev.emergencies   === next.emergencies   &&
-  prev.countries     === next.countries     &&
-  prev.airports      === next.airports      &&
-  prev.track         === next.track
+  prev.selected         === next.selected         &&
+  prev.filters          === next.filters          &&
+  prev.hasFilters       === next.hasFilters       &&
+  prev.flights          === next.flights          &&
+  prev.totalFlights     === next.totalFlights     &&
+  prev.emergencies      === next.emergencies      &&
+  prev.countries        === next.countries        &&
+  prev.airlines         === next.airlines         &&
+  prev.airports         === next.airports         &&
+  prev.track            === next.track            &&
+  prev.onAirportSelect  === next.onAirportSelect
 )
 
 export default function App() {
@@ -41,18 +44,27 @@ export default function App() {
   const [flyTarget, setFlyTarget] = useState(null)
   const [mapLayer,  setMapLayer]  = useState('dark')
 
-  // useTransition defers low-priority state updates (filtering/sorting)
-  // so the map and input feel instant even while 8 000+ flights are being filtered.
   const [, startTransition] = useTransition()
 
-  const { track } = useTrack(selected?.icao24)
+  const { track: rawTrack } = useTrack(selected?.icao24)
+
+  // Bridge the gap between the historical track and the live position so the
+  // trail actually connects to the plane icon instead of ending behind it.
+  const track = useMemo(() => {
+    if (!rawTrack || !selected?.lat || !selected?.lon) return rawTrack
+    const last = rawTrack[rawTrack.length - 1]
+    const now  = Math.floor(Date.now() / 1000)
+    if (!last || now <= (last[0] ?? 0) + 30) return rawTrack
+    // [time, lat, lon, baro_alt, geo_alt, on_ground]
+    return [...rawTrack, [now, selected.lat, selected.lon, selected.alt ?? null, selected.geoAlt ?? null, selected.onGround ? 1 : 0]]
+  }, [rawTrack, selected])
 
   // Keep the selected flight fresh on every auto-refresh
   useEffect(() => {
     if (!selected) return
     const fresh = flights.find(f => f.icao24 === selected.icao24)
     if (fresh) setSelected(fresh)
-  }, [flights])  // intentionally omits `selected` to avoid loop
+  }, [flights])
 
   // Escape key → deselect
   useEffect(() => {
@@ -61,9 +73,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', h)
   }, [])
 
-  // ── Derived data (all wrapped in useMemo for stability) ──────────────────
+  // ── Derived data ──────────────────────────────────────────────────────────
   const countries = useMemo(
     () => [...new Set(flights.map(f => f.origin).filter(Boolean))].sort(),
+    [flights],
+  )
+
+  const airlines = useMemo(
+    () => [...new Set(flights.map(f => airlineOf(f.callsign)).filter(Boolean))].sort(),
     [flights],
   )
 
@@ -72,6 +89,7 @@ export default function App() {
     if (filters.hideGround)    r = r.filter(f => !f.onGround)
     if (filters.emergencyOnly) r = r.filter(f => ['7500','7600','7700'].includes(String(f.squawk)))
     if (filters.country)       r = r.filter(f => f.origin === filters.country)
+    if (filters.airline)       r = r.filter(f => airlineOf(f.callsign) === filters.airline)
     if (filters.source !== '') r = r.filter(f => f.source === Number(filters.source))
     if (filters.minAlt !== '') r = r.filter(f => f.alt   != null && f.alt   >= Number(filters.minAlt))
     if (filters.maxAlt !== '') r = r.filter(f => f.alt   != null && f.alt   <= Number(filters.maxAlt))
@@ -107,8 +125,11 @@ export default function App() {
     if (f?.lat && f?.lon) setFlyTarget(f)
   }
 
-  // Wrap filter updates in startTransition — filtering 8 000 flights is
-  // non-urgent; React 18 will yield to input/map events first.
+  const handleAirportSelect = useCallback(a => {
+    setSelected(null)
+    setFlyTarget({ lat: a.lat, lon: a.lon, zoom: 13 })
+  }, [])
+
   const updateFilter = (key, value) =>
     startTransition(() => setFilters(prev => ({ ...prev, [key]: value })))
 
@@ -129,6 +150,10 @@ export default function App() {
         error={error}
         mapLayer={mapLayer}
         onLayerChange={setMapLayer}
+        flights={flights}
+        airports={airports}
+        onFlightSelect={handleSelect}
+        onAirportSelect={handleAirportSelect}
       />
 
       <div className="body">
@@ -143,9 +168,11 @@ export default function App() {
           onClearFilters={clearFilters}
           hasFilters={hasFilters}
           countries={countries}
+          airlines={airlines}
           emergencies={emergencies}
           airports={airports}
           track={track}
+          onAirportSelect={handleAirportSelect}
         />
 
         <MapView

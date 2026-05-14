@@ -95,6 +95,22 @@ export function useRoute(callsign) {
   return route
 }
 
+// Fetches gate, terminal, and live status from AeroDataBox (requires AERODATABOX_KEY in .env)
+export function useFlightStatus(callsign) {
+  const [status, setStatus] = useState(null)
+
+  useEffect(() => {
+    const cs = callsign?.trim()
+    if (!cs) { setStatus(null); return }
+    fetch(`/api/flight-status/${cs}`)
+      .then(r => r.json())
+      .then(d => setStatus(d && !d.error && Object.keys(d).length > 0 ? d : null))
+      .catch(() => setStatus(null))
+  }, [callsign])
+
+  return status
+}
+
 // Fetches actual departure/arrival info from the last 24 h of OpenSky flight records
 export function useFlightHistory(icao24) {
   const [history, setHistory] = useState(null)

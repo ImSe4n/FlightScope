@@ -8,8 +8,8 @@ export default function Sidebar({
   flights, totalFlights,
   selected, onSelect, onDeselect,
   filters, onFilterChange, onClearFilters, hasFilters,
-  countries, emergencies,
-  airports, track,
+  countries, airlines, emergencies,
+  airports, track, onAirportSelect,
 }) {
   const [tab, setTab] = useState('flights')
 
@@ -22,7 +22,7 @@ export default function Sidebar({
       {/* Detail view replaces the whole content area when a flight is selected */}
       {selected ? (
         <div className="sb-main">
-          <FlightDetail flight={selected} onClose={onDeselect} airports={airports} track={track} />
+          <FlightDetail flight={selected} onClose={onDeselect} airports={airports} track={track} onAirportSelect={onAirportSelect} />
         </div>
       ) : (
         <>
@@ -58,6 +58,7 @@ export default function Sidebar({
                 onClear={onClearFilters}
                 hasFilters={hasFilters}
                 countries={countries}
+                airlines={airlines}
               />
             )}
           </div>

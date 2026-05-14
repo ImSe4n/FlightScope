@@ -1,6 +1,6 @@
 import { SOURCE_TYPES } from '../utils/constants'
 
-export default function FilterPanel({ filters, onChange, onClear, hasFilters, countries }) {
+export default function FilterPanel({ filters, onChange, onClear, hasFilters, countries, airlines }) {
   const set = key => e =>
     onChange(key, e.target.type === 'checkbox' ? e.target.checked : e.target.value)
 
@@ -25,6 +25,11 @@ export default function FilterPanel({ filters, onChange, onClear, hasFilters, co
       <select className="filter-select" value={filters.country} onChange={set('country')}>
         <option value="">All countries</option>
         {countries.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+
+      <select className="filter-select" value={filters.airline} onChange={set('airline')}>
+        <option value="">All airlines</option>
+        {airlines.map(a => <option key={a} value={a}>{a}</option>)}
       </select>
 
       <select className="filter-select" value={filters.source} onChange={set('source')}>

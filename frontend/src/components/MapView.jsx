@@ -13,7 +13,7 @@ function FlyTo({ target }) {
   useEffect(() => {
     if (target && target !== prev.current) {
       prev.current = target
-      map.flyTo([target.lat, target.lon], 9, { duration: 1.1 })
+      map.flyTo([target.lat, target.lon], target.zoom ?? 9, { duration: 1.1 })
     }
   }, [target, map])
   return null
@@ -39,8 +39,11 @@ function TrackLayer({ track }) {
     if (valid.length < 2) return
 
     for (let i = 0; i < valid.length - 1; i++) {
-      const [, lat1, lon1, alt1] = valid[i]
-      const [, lat2, lon2]       = valid[i + 1]
+      const [t1, lat1, lon1, alt1] = valid[i]
+      const [t2, lat2, lon2]       = valid[i + 1]
+      // Skip segments where data is missing for > 15 minutes — these create
+      // false straight-line "bends" across large distances.
+      if (t2 - t1 > 900) continue
       const seg = L.polyline([[lat1, lon1], [lat2, lon2]], {
         color:   altColor(alt1),   // alt1 is already in metres — matches altBucket thresholds
         weight:  3,

@@ -3,6 +3,7 @@ import { EMERGENCY_SQUAWKS } from '../utils/constants'
 
 const LIST_LIMIT = 300
 const ft = v => v != null ? Math.round(v * 3.28084) : null
+const airlineOf = cs => cs?.trim().toUpperCase().match(/^([A-Z]{3})\d/)?.[1] ?? ''
 
 // Vertical-rate arrow: ↑ climbing, ↓ descending, blank if level / unknown
 function vrArrow(vr) {
@@ -15,9 +16,10 @@ export default function FlightList({ flights, total, selected, onSelect }) {
 
   const sorted = useMemo(() => {
     const arr = [...flights]
-    if (sortBy === 'alt')   arr.sort((a, b) => (b.alt   ?? -Infinity) - (a.alt   ?? -Infinity))
-    if (sortBy === 'speed') arr.sort((a, b) => (b.speed ?? -Infinity) - (a.speed ?? -Infinity))
-    if (sortBy === 'cs')    arr.sort((a, b) => (a.callsign || 'zzz').localeCompare(b.callsign || 'zzz'))
+    if (sortBy === 'alt')     arr.sort((a, b) => (b.alt   ?? -Infinity) - (a.alt   ?? -Infinity))
+    if (sortBy === 'speed')   arr.sort((a, b) => (b.speed ?? -Infinity) - (a.speed ?? -Infinity))
+    if (sortBy === 'cs')      arr.sort((a, b) => (a.callsign || 'zzz').localeCompare(b.callsign || 'zzz'))
+    if (sortBy === 'airline') arr.sort((a, b) => airlineOf(a.callsign).localeCompare(airlineOf(b.callsign)))
     return arr
   }, [flights, sortBy])
 
@@ -35,9 +37,10 @@ export default function FlightList({ flights, total, selected, onSelect }) {
 
         <div className="sort-pills">
           {[
-            { key: 'alt',   label: 'Alt'   },
-            { key: 'speed', label: 'Speed' },
-            { key: 'cs',    label: 'A–Z'   },
+            { key: 'alt',     label: 'Alt'     },
+            { key: 'speed',   label: 'Speed'   },
+            { key: 'cs',      label: 'A–Z'     },
+            { key: 'airline', label: 'Airline' },
           ].map(s => (
             <button
               key={s.key}

@@ -102,6 +102,19 @@ export function AirportPopup({ a, loading = false }) {
           </div>
         )}
 
+        {/* Predicted active runway */}
+        {a.predictedRunway && (
+          <div className="popup-rw-active">
+            <span className="popup-rw-active-label">Active runway (est.)</span>
+            <span className="popup-rw-active-val">RWY {a.predictedRunway}</span>
+            {a.metarWindDir != null && (
+              <span className="popup-rw-wind">
+                Wind {a.metarWindDir}°{a.metarWindSpd != null ? ` · ${a.metarWindSpd}kt` : ''}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* METAR */}
         {a.metar && a.metar !== 'N/A' && (
           <div className="popup-metar-wrap">
@@ -110,16 +123,39 @@ export function AirportPopup({ a, loading = false }) {
           </div>
         )}
 
+        {/* Hourly weather */}
+        {a.weather?.hourly?.length > 0 && (
+          <div className="popup-hourly">
+            <div className="popup-hourly-title">Hourly Weather (UTC)</div>
+            <div className="popup-hourly-list">
+              {a.weather.hourly.map(h => (
+                <div key={h.time} className="popup-hourly-row">
+                  <span className="popup-hourly-time">{h.time.split('T')[1]}</span>
+                  <span className="popup-hourly-temp">{h.temp != null ? `${h.temp}°C` : '—'}</span>
+                  <span className="popup-hourly-wind">
+                    {h.windspeed != null ? `${Math.round(h.windspeed)}kt` : ''}
+                    {h.winddir != null ? ` ${windDir(h.winddir)}` : ''}
+                  </span>
+                  <span className="popup-hourly-wx">{WX[h.wxcode] ?? ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Runways */}
         {a.runways?.length > 0 && (
           <div className="popup-runways">
             <div className="popup-runways-title">Runways</div>
             {a.runways.slice(0, 4).map((rw, i) => (
-              <div key={i} className="runway-line">
+              <div key={i} className={`runway-line${a.predictedRunway && (rw.le_ident === a.predictedRunway || rw.he_ident === a.predictedRunway) ? ' runway-line--active' : ''}`}>
                 {rw.le_ident}/{rw.he_ident}
                 {rw.length_ft && ` · ${Number(rw.length_ft).toLocaleString()} ft`}
                 {rw.width_ft  && ` × ${rw.width_ft} ft`}
                 {rw.surface   && ` (${rw.surface})`}
+                {(rw.le_ident === a.predictedRunway || rw.he_ident === a.predictedRunway) && (
+                  <span className="runway-active-tag">active</span>
+                )}
               </div>
             ))}
           </div>
