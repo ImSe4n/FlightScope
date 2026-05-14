@@ -731,8 +731,10 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
   font-weight: 800; color: var(--accent);
   letter-spacing: 0.04em;
 }
-.fd-route-role  { font-size: 10px; color: var(--txt-3); }
-.fd-route-time  { font-size: 10px; color: var(--txt-2); font-family: var(--mono); margin-top: 2px; }
+.fd-route-airport { font-size: 10px; color: var(--txt-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fd-route-city    { font-size: 9px;  color: var(--txt-3); }
+.fd-route-role    { font-size: 10px; color: var(--txt-3); margin-top: 2px; }
+.fd-route-time    { font-size: 10px; color: var(--txt-2); font-family: var(--mono); margin-top: 2px; }
 .fd-route-mid {
   display: flex; align-items: center; flex-direction: row; gap: 3px;
   flex-shrink: 0;
@@ -740,6 +742,13 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 .fd-route-dash  { flex: 1; height: 1px; background: var(--border-h); width: 16px; }
 .fd-route-plane { font-size: 13px; color: var(--txt-2); }
 .fd-route-op    { font-size: 10px; color: var(--txt-3); margin-top: 7px; }
+
+/* ── Altitude profile chart ──────────────────────────────────────────────── */
+.alt-profile-svg { display: block; overflow: visible; }
+.alt-axis-lbl {
+  font-size: 8px; fill: var(--txt-3);
+  font-family: var(--mono);
+}
 
 /* ── Aircraft info card ──────────────────────────────────────────────────── */
 .fd-ac-grid {

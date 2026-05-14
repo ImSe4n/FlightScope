@@ -27,7 +27,9 @@ const MemoSidebar = memo(Sidebar, (prev, next) =>
   prev.flights       === next.flights       &&
   prev.totalFlights  === next.totalFlights  &&
   prev.emergencies   === next.emergencies   &&
-  prev.countries     === next.countries
+  prev.countries     === next.countries     &&
+  prev.airports      === next.airports      &&
+  prev.track         === next.track
 )
 
 export default function App() {
@@ -142,6 +144,8 @@ export default function App() {
           hasFilters={hasFilters}
           countries={countries}
           emergencies={emergencies}
+          airports={airports}
+          track={track}
         />
 
         <MapView

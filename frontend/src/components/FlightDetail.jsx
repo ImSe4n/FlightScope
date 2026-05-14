@@ -17,7 +17,72 @@ function VrIndicator({ vr }) {
     : <span style={{ color: 'var(--red)'   }}>↓ {fmt(vr, 'm/s', 1)}</span>
 }
 
-export default function FlightDetail({ flight: f, onClose }) {
+// Airport lookup by ICAO ident or IATA code
+function airportMeta(airports, code) {
+  if (!code || !airports?.length) return null
+  return airports.find(a => a.ident === code || a.iata === code) ?? null
+}
+
+// SVG altitude profile — drawn from the OpenSky track path array
+function AltitudeProfile({ track }) {
+  if (!track || track.length < 2) return null
+
+  const pts = track
+    .filter(p => p[3] != null)
+    .map(p => ({ t: p[0], alt: Math.round(p[3] * 3.28084) }))
+  if (pts.length < 2) return null
+
+  const W = 280, H = 90
+  const PAD = { top: 8, right: 6, bottom: 18, left: 46 }
+  const iW = W - PAD.left - PAD.right
+  const iH = H - PAD.top  - PAD.bottom
+
+  const minAlt = Math.min(...pts.map(p => p.alt))
+  const maxAlt = Math.max(...pts.map(p => p.alt))
+  const minT   = pts[0].t
+  const maxT   = pts[pts.length - 1].t
+  const rng    = maxAlt - minAlt || 1
+
+  const x = t   => PAD.left + (t   - minT)  / (maxT - minT) * iW
+  const y = alt => PAD.top  + iH - (alt - minAlt) / rng * iH
+
+  const line = pts.map(p => `${x(p.t).toFixed(1)},${y(p.alt).toFixed(1)}`).join(' ')
+  const area = `${x(minT).toFixed(1)},${(PAD.top + iH).toFixed(1)} ${line} ${x(maxT).toFixed(1)},${(PAD.top + iH).toFixed(1)}`
+
+  const hhmm = ts => new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const last  = pts[pts.length - 1]
+
+  return (
+    <div className="fd-card">
+      <div className="fd-card-label">Altitude History</div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="alt-profile-svg">
+        <defs>
+          <linearGradient id="altGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#38bdf8" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.01" />
+          </linearGradient>
+        </defs>
+        {/* Grid lines */}
+        <line x1={PAD.left} y1={PAD.top}      x2={W - PAD.right} y2={PAD.top}      stroke="rgba(56,189,248,0.07)" strokeWidth="1" />
+        <line x1={PAD.left} y1={PAD.top + iH} x2={W - PAD.right} y2={PAD.top + iH} stroke="rgba(56,189,248,0.07)" strokeWidth="1" />
+        {/* Fill */}
+        <polygon points={area} fill="url(#altGrad)" />
+        {/* Line */}
+        <polyline points={line} fill="none" stroke="#38bdf8" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Current-position dot */}
+        <circle cx={x(last.t)} cy={y(last.alt)} r="3" fill="#38bdf8" stroke="var(--panel)" strokeWidth="1.5" />
+        {/* Y-axis labels */}
+        <text x={PAD.left - 4} y={PAD.top + 4}  textAnchor="end" className="alt-axis-lbl">{maxAlt.toLocaleString()} ft</text>
+        <text x={PAD.left - 4} y={PAD.top + iH} textAnchor="end" className="alt-axis-lbl">{minAlt.toLocaleString()} ft</text>
+        {/* X-axis labels */}
+        <text x={PAD.left}          y={H - 2} textAnchor="start" className="alt-axis-lbl">{hhmm(minT)}</text>
+        <text x={W - PAD.right}     y={H - 2} textAnchor="end"   className="alt-axis-lbl">{hhmm(maxT)}</text>
+      </svg>
+    </div>
+  )
+}
+
+export default function FlightDetail({ flight: f, onClose, airports, track }) {
   const sq        = String(f.squawk)
   const emergency = EMERGENCY_SQUAWKS[sq]
   const source    = SOURCE_TYPES[f.source] ?? 'Unknown'
@@ -31,11 +96,14 @@ export default function FlightDetail({ flight: f, onClose }) {
   const copy = text => navigator.clipboard?.writeText(text).catch(() => {})
 
   // Merge route (scheduled) with history (actual) — prefer scheduled
-  const latest  = history?.latest
-  const fromIcao = route?.route?.[0]                   ?? latest?.estDepartureAirport
+  const latest   = history?.latest
+  const fromIcao = route?.route?.[0]                    ?? latest?.estDepartureAirport
   const toIcao   = route?.route?.[route.route.length-1] ?? latest?.estArrivalAirport
   const depTime  = latest?.firstSeen
   const arrTime  = latest?.lastSeen
+
+  const fromInfo = airportMeta(airports, fromIcao)
+  const toInfo   = airportMeta(airports, toIcao)
 
   return (
     <div className="flight-detail">
@@ -86,6 +154,8 @@ export default function FlightDetail({ flight: f, onClose }) {
             {/* Departure */}
             <div className="fd-route-end">
               <div className="fd-route-icao">{fromIcao ?? '????'}</div>
+              {fromInfo && <div className="fd-route-airport">{fromInfo.name}</div>}
+              {fromInfo?.city && <div className="fd-route-city">{fromInfo.city}{fromInfo.country ? ` · ${fromInfo.country}` : ''}</div>}
               <div className="fd-route-role">Departure</div>
               {depTime && <div className="fd-route-time">{hhmm(depTime)}</div>}
             </div>
@@ -100,6 +170,8 @@ export default function FlightDetail({ flight: f, onClose }) {
             {/* Arrival */}
             <div className="fd-route-end fd-route-end--right">
               <div className="fd-route-icao">{toIcao ?? '????'}</div>
+              {toInfo && <div className="fd-route-airport">{toInfo.name}</div>}
+              {toInfo?.city && <div className="fd-route-city">{toInfo.city}{toInfo.country ? ` · ${toInfo.country}` : ''}</div>}
               <div className="fd-route-role">Arrival</div>
               {arrTime && <div className="fd-route-time">{hhmm(arrTime)}</div>}
             </div>
@@ -112,6 +184,9 @@ export default function FlightDetail({ flight: f, onClose }) {
           )}
         </div>
       )}
+
+      {/* ── Altitude profile ─────────────────────────────────────────────── */}
+      <AltitudeProfile track={track} />
 
       {/* ── Aircraft info card ───────────────────────────────────────────── */}
       {acInfo && (
