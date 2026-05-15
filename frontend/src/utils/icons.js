@@ -85,18 +85,31 @@ export function makePlaneIcon(heading, alt, category = 'default') {
   const cat = _SVG[category] ? category : 'default'
   const key = `${hb}_${ab}_${cat}`
   if (!_cache[key]) {
-    const col   = altColor(alt)
-    const sizes = _SIZE[cat]
-    const html  = cat === 'default'
-      ? `<span class="plane-icon" style="--r:${hb - 90}deg;color:${col}">✈</span>`
-      : `<span class="plane-icon plane-icon--svg" style="--r:${hb - 90}deg;color:${col}">${_SVG[cat]}</span>`
-    _cache[key] = L.divIcon({
-      html,
-      className:   '',
-      iconSize:    sizes.iconSize,
-      iconAnchor:  sizes.iconAnchor,
-      popupAnchor: [0, -12],
-    })
+    const col = altColor(alt)
+    const deg = hb - 90
+
+    if (cat === 'default') {
+      _cache[key] = L.divIcon({
+        html:        `<span class="plane-icon" style="--r:${deg}deg;color:${col}">✈</span>`,
+        className:   '',
+        iconSize:    [20, 20],
+        iconAnchor:  [10, 10],
+        popupAnchor: [0, -12],
+      })
+    } else {
+      // Use a square container so rotation is always centred on the marker point.
+      // The SVG sits inside a flex-centred square div; inline display:flex overrides
+      // the block set by .plane-icon in CSS.
+      const [w, h] = _SIZE[cat].iconSize
+      const box    = Math.max(w, h) + 4   // a few px padding so tip never clips
+      _cache[key]  = L.divIcon({
+        html: `<span class="plane-icon plane-icon--svg" style="display:flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;--r:${deg}deg;color:${col}">${_SVG[cat]}</span>`,
+        className:   '',
+        iconSize:    [box, box],
+        iconAnchor:  [box / 2, box / 2],
+        popupAnchor: [0, -(box / 2 + 4)],
+      })
+    }
   }
   return _cache[key]
 }

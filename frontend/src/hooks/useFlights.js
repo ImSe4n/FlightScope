@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { REFRESH_MS } from '../utils/constants'
 
 export function useFlights() {
@@ -33,6 +33,38 @@ export function useFlights() {
   }, [refresh])
 
   return { flights, loading, error, updatedAt, refresh }
+}
+
+// Dead-reckoning: smoothly interpolate aircraft positions between API updates.
+// Runs every 500 ms; resets whenever fresh API data arrives.
+export function useDeadReckonedFlights(flights) {
+  const baseRef = useRef({ flights, at: Date.now() })
+  const [interpolated, setInterpolated] = useState(flights)
+
+  // New API snapshot → reset base position and immediately show it
+  useEffect(() => {
+    baseRef.current = { flights, at: Date.now() }
+    setInterpolated(flights)
+  }, [flights])
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const { flights: base, at } = baseRef.current
+      const dt = (Date.now() - at) / 1000  // seconds since last real update
+
+      setInterpolated(base.map(f => {
+        if (f.onGround || !f.speed || f.heading == null || f.lat == null) return f
+        const hdRad = f.heading * (Math.PI / 180)
+        const dist  = f.speed * dt   // metres
+        const dlat  = (dist * Math.cos(hdRad)) / 111_320
+        const dlon  = (dist * Math.sin(hdRad)) / (111_320 * Math.cos(f.lat * (Math.PI / 180)))
+        return { ...f, lat: f.lat + dlat, lon: f.lon + dlon }
+      }))
+    }, 500)
+    return () => clearInterval(id)
+  }, [])
+
+  return interpolated
 }
 
 export function useAirports() {

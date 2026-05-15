@@ -336,6 +336,57 @@ def _parse_metar_wind(metar: str | None):
     return (None, int(spd_s)) if dir_s == "VRB" else (int(dir_s), int(spd_s))
 
 
+def _infer_runway_from_traffic(ap_lat: float, ap_lon: float, runways: list) -> str | None:
+    """Guess the active runway by looking at low-altitude climbing aircraft in the
+    live cache that are within 30 km of the airport.  Returns the runway whose
+    magnetic heading best matches the median departure heading, or None."""
+    global _flight_cache
+    if not _flight_cache or not runways:
+        return None
+
+    headings = []
+    for f in _flight_cache.get("flights", []):
+        if f.get("onGround") or f.get("lat") is None or f.get("lon") is None:
+            continue
+        alt = f.get("alt")
+        if alt is None or alt > 3_000:          # below ~10 000 ft
+            continue
+        vr = f.get("vertRate")
+        if vr is None or vr < 1.5:              # climbing ≥ ~300 fpm
+            continue
+        dlat = f["lat"] - ap_lat
+        dlon = f["lon"] - ap_lon
+        dist_km = math.sqrt(
+            (dlat * 111) ** 2 +
+            (dlon * 111 * math.cos(math.radians(ap_lat))) ** 2
+        )
+        if dist_km > 30:
+            continue
+        hdg = f.get("heading")
+        if hdg is not None:
+            headings.append(float(hdg))
+
+    if not headings:
+        return None
+
+    # Circular median: convert to unit vectors, average, back to angle
+    import cmath
+    avg = sum(cmath.exp(1j * math.radians(h)) for h in headings) / len(headings)
+    med_hdg = math.degrees(cmath.phase(avg)) % 360
+
+    best_ident, best_diff = None, 360
+    for rw in runways:
+        for hdg_key, id_key in [("le_heading_degT", "le_ident"), ("he_heading_degT", "he_ident")]:
+            try:
+                hdg  = float(rw[hdg_key])
+                diff = abs((hdg - med_hdg + 180) % 360 - 180)
+                if diff < best_diff:
+                    best_diff, best_ident = diff, rw.get(id_key)
+            except (KeyError, TypeError, ValueError):
+                pass
+    return best_ident
+
+
 def _predict_runway(runways: list, wind_dir) -> str | None:
     """Return the predicted active-runway ident (e.g. '27L') from wind direction.
     Aircraft land into the wind, so active runway heading ≈ wind direction."""
@@ -378,9 +429,10 @@ def _build_detail(ident, lat, lon, name):
             f_adb.result(), f_wiki.result(), f_weather.result(), f_metar.result()
         )
 
-    runways     = adb.get("runways", [])
+    runways            = adb.get("runways", [])
     wind_dir, wind_spd = _parse_metar_wind(metar)
-    pred_rw     = _predict_runway(runways, wind_dir)
+    # Prefer live-traffic inference (actual departures); fall back to METAR wind
+    pred_rw = _infer_runway_from_traffic(lat, lon, runways) or _predict_runway(runways, wind_dir)
 
     detail = {
         "ident":           ident,
@@ -470,13 +522,39 @@ def get_aircraft_info(icao24: str):
 
 @app.get("/api/route/{callsign}")
 def get_route(callsign: str):
+    cs = callsign.strip().upper()
+
+    # 1. OpenSky scheduled-route database
     try:
         r = requests.get(
-            f"https://opensky-network.org/api/routes?callsign={callsign.strip().upper()}",
+            f"https://opensky-network.org/api/routes?callsign={cs}",
             timeout=8, headers=_opensky_tokens.headers())
-        return r.json() if r.ok else {}
+        if r.ok:
+            data = r.json()
+            if data.get("route") and len(data["route"]) >= 2:
+                return data
     except Exception:
-        return {}
+        pass
+
+    # 2. adsbdb.com — free, good coverage of scheduled routes
+    try:
+        r = requests.get(
+            f"https://api.adsbdb.com/v0/callsign/{cs}",
+            timeout=8, headers={"User-Agent": "FlightScope/1.0"})
+        if r.ok:
+            fr = r.json().get("response", {}).get("flightroute") or {}
+            dep = (fr.get("origin")      or {}).get("icao_code")
+            arr = (fr.get("destination") or {}).get("icao_code")
+            if dep and arr:
+                return {
+                    "callsign":    cs,
+                    "route":       [dep, arr],
+                    "operatorCode": (fr.get("airline") or {}).get("icao"),
+                }
+    except Exception:
+        pass
+
+    return {}
 
 
 @app.get("/api/flight-history/{icao24}")
