@@ -198,7 +198,7 @@ const AirportMarker = memo(function AirportMarker({ a }) {
       icon={AIRPORT_ICON}
       eventHandlers={{ click: handleClick }}
     >
-      <Popup maxWidth={340}>
+      <Popup maxWidth={380}>
         <AirportPopup a={merged} loading={loading} />
       </Popup>
     </Marker>
@@ -249,6 +249,21 @@ function AltLegend() {
   )
 }
 
+// ── Selected-flight tracker — uses dead-reckoned position from flight layer ────
+function SelectedMarker({ selected, flights }) {
+  // Find the dead-reckoned version of the selected flight (position updates smoothly)
+  const dr = selected ? flights.find(f => f.icao24 === selected.icao24) : null
+  const pos = dr ?? selected
+  if (!pos?.lat || !pos?.lon) return null
+  return (
+    <Marker
+      position={[pos.lat, pos.lon]}
+      icon={makeSelectedIcon(pos.heading)}
+      zIndexOffset={1000}
+    />
+  )
+}
+
 // ── Main exported component ───────────────────────────────────────────────────
 export default function MapView({ flights, airports, selected, flyTarget, mapLayer, onSelect, onDeselect, track }) {
   const layer = TILE_LAYERS[mapLayer] ?? TILE_LAYERS.dark
@@ -276,13 +291,7 @@ export default function MapView({ flights, airports, selected, flyTarget, mapLay
         <TrackLayer track={track} />
         <FlightLayer flights={flights} onSelect={onSelect} />
 
-        {selected?.lat && selected?.lon && (
-          <Marker
-            position={[selected.lat, selected.lon]}
-            icon={makeSelectedIcon(selected.heading)}
-            zIndexOffset={1000}
-          />
-        )}
+        <SelectedMarker selected={selected} flights={flights} />
 
         <AirportLayer airports={airports} />
       </MapContainer>

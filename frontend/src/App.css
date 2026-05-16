@@ -981,3 +981,90 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 }
 .fd-rte-dash { width: 12px; height: 1px; background: var(--border-h); }
 .fd-rte-icon { font-size: 11px; color: var(--txt-3); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   AIRPORT POPUP — INFO / FLIGHTS TABS
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Top-level tab bar */
+.ap-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 8px 0 10px;
+  border-bottom: 1px solid var(--border-h);
+}
+.ap-tab {
+  background: none; border: none;
+  color: var(--txt-3);
+  font-size: 11px; font-weight: 700; font-family: var(--font);
+  letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 5px 10px 6px;
+  cursor: pointer; position: relative;
+  transition: color 0.12s;
+}
+.ap-tab:hover { color: var(--txt-2); }
+.ap-tab--active { color: var(--accent); }
+.ap-tab--active::after {
+  content: '';
+  position: absolute; bottom: -1px; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+/* Flights tab: DEP / ARR sub-tabs */
+.apf-wrap { display: flex; flex-direction: column; gap: 8px; }
+.apf-subtabs {
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--border-h);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.apf-subtab {
+  flex: 1; padding: 5px 0;
+  background: none; border: none;
+  color: var(--txt-3); font-size: 11px; font-weight: 600;
+  font-family: var(--font); cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.apf-subtab:hover:not(.apf-subtab--active) { background: var(--panel-3); color: var(--txt-2); }
+.apf-subtab--active {
+  background: var(--accent-d);
+  color: var(--accent);
+}
+
+/* Flights list */
+.apf-loading { font-size: 11px; color: var(--txt-3); font-style: italic; padding: 8px 0; }
+.apf-empty   { font-size: 11px; color: var(--txt-3); font-style: italic; padding: 8px 0; }
+
+.apf-list {
+  display: flex; flex-direction: column;
+  max-height: 260px; overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56,189,248,0.1) transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.apf-row {
+  display: grid; grid-template-columns: 80px 1fr 70px;
+  gap: 4px; align-items: center;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.apf-row:last-child { border-bottom: none; }
+.apf-row:hover { background: rgba(255,255,255,0.03); }
+
+.apf-cs {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--txt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.apf-route  { font-size: 10px; color: var(--txt-3); }
+.apf-airport {
+  font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--accent);
+}
+.apf-time {
+  font-family: var(--mono); font-size: 10px; color: var(--txt-3);
+  text-align: right; white-space: nowrap;
+}

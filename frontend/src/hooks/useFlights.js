@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { REFRESH_MS } from '../utils/constants'
 
 export function useFlights() {
@@ -35,36 +35,109 @@ export function useFlights() {
   return { flights, loading, error, updatedAt, refresh }
 }
 
-// Dead-reckoning: smoothly interpolate aircraft positions between API updates.
-// Runs every 500 ms; resets whenever fresh API data arrives.
-export function useDeadReckonedFlights(flights) {
-  const baseRef = useRef({ flights, at: Date.now() })
-  const [interpolated, setInterpolated] = useState(flights)
+// ── Dead-reckoning helpers ─────────────────────────────────────────────────────
+const _R      = 6_371_000   // Earth radius, metres
+const _MAX_DT = 300         // cap extrapolation at 5 minutes
+const _TRANS  = 2_000       // blend duration (ms) when fresh API data arrives
 
-  // New API snapshot → reset base position and immediately show it
+// Dead-reckon a single flight by `dt` seconds.
+function _drOne(f, dt) {
+  if (f.onGround || !f.speed || f.heading == null || f.lat == null) return f
+  const s     = Math.min(dt, _MAX_DT) * f.speed          // metres travelled
+  const hdRad = f.heading * (Math.PI / 180)
+  const dLat  = (s * Math.cos(hdRad)) / _R               // radians
+  const dLon  = (s * Math.sin(hdRad)) / (_R * Math.cos(f.lat * (Math.PI / 180)))
+  const newAlt = f.alt != null && f.vertRate != null
+    ? Math.max(0, f.alt + f.vertRate * Math.min(dt, _MAX_DT))
+    : f.alt
+  return {
+    ...f,
+    lat: f.lat + dLat * (180 / Math.PI),
+    lon: f.lon + dLon * (180 / Math.PI),
+    alt: newAlt,
+  }
+}
+
+// Quadratic ease-out so the transition from old→new feels natural.
+function _easeOut(t) { return 1 - (1 - t) ** 2 }
+
+/**
+ * Returns a version of `flights` with positions smoothly interpolated every
+ * 500 ms.  When fresh API data arrives, apparent positions (already DR'd) are
+ * used as the blend-from point so there is no visible jump.
+ */
+export function useDeadReckonedFlights(flights) {
+  // Ref holds the single source of truth; mutation is safe because useMemo
+  // below reads it on every tick.
+  const sRef = useRef({
+    base:      flights,
+    baseAt:    Date.now(),
+    transFrom: null,   // Map<icao24, {lat,lon,alt}> — positions at blend start
+    transAt:   null,
+  })
+  const [tick, setTick] = useState(0)
+
+  // When fresh API data arrives, snapshot current apparent positions as the
+  // blend-from state so the transition is seamless.
   useEffect(() => {
-    baseRef.current = { flights, at: Date.now() }
-    setInterpolated(flights)
+    const now = Date.now()
+    const { base, baseAt, transFrom, transAt } = sRef.current
+    const dt = (now - baseAt) / 1000
+
+    const snap = new Map()
+    for (const f of base) {
+      const dr = _drOne(f, dt)
+      if (transFrom && transAt) {
+        const e = Math.min((now - transAt) / _TRANS, 1)
+        const p = transFrom.get(f.icao24)
+        if (p && e < 1) {
+          snap.set(f.icao24, {
+            lat: p.lat + (dr.lat - p.lat) * e,
+            lon: p.lon + (dr.lon - p.lon) * e,
+            alt: p.alt != null && dr.alt != null ? p.alt + (dr.alt - p.alt) * e : dr.alt,
+          })
+          continue
+        }
+      }
+      snap.set(f.icao24, { lat: dr.lat, lon: dr.lon, alt: dr.alt })
+    }
+
+    sRef.current = { base: flights, baseAt: now, transFrom: snap, transAt: now }
+    setTick(t => t + 1)
   }, [flights])
 
+  // 500 ms animation tick
   useEffect(() => {
-    const id = setInterval(() => {
-      const { flights: base, at } = baseRef.current
-      const dt = (Date.now() - at) / 1000  // seconds since last real update
-
-      setInterpolated(base.map(f => {
-        if (f.onGround || !f.speed || f.heading == null || f.lat == null) return f
-        const hdRad = f.heading * (Math.PI / 180)
-        const dist  = f.speed * dt   // metres
-        const dlat  = (dist * Math.cos(hdRad)) / 111_320
-        const dlon  = (dist * Math.sin(hdRad)) / (111_320 * Math.cos(f.lat * (Math.PI / 180)))
-        return { ...f, lat: f.lat + dlat, lon: f.lon + dlon }
-      }))
-    }, 500)
+    const id = setInterval(() => setTick(t => t + 1), 500)
     return () => clearInterval(id)
   }, [])
 
-  return interpolated
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => {
+    const now = Date.now()
+    const { base, baseAt, transFrom, transAt } = sRef.current
+    const dt = (now - baseAt) / 1000
+
+    return base.map(f => {
+      const dr = _drOne(f, dt)
+      if (transFrom && transAt) {
+        const elapsed = (now - transAt) / _TRANS
+        if (elapsed < 1) {
+          const p = transFrom.get(f.icao24)
+          if (p) {
+            const t = _easeOut(elapsed)
+            return {
+              ...dr,
+              lat: p.lat + (dr.lat - p.lat) * t,
+              lon: p.lon + (dr.lon - p.lon) * t,
+              alt: p.alt != null && dr.alt != null ? p.alt + (dr.alt - p.alt) * t : dr.alt,
+            }
+          }
+        }
+      }
+      return dr
+    })
+  }, [tick])
 }
 
 export function useAirports() {
@@ -141,6 +214,25 @@ export function useFlightStatus(callsign) {
   }, [callsign])
 
   return status
+}
+
+// Lazily loads departures + arrivals for an airport; call load() to trigger.
+export function useAirportFlights(ident) {
+  const [data,    setData]    = useState(null)
+  const [loading, setLoading] = useState(false)
+  const triggered = useRef(false)
+
+  const load = useCallback(() => {
+    if (!ident || triggered.current) return
+    triggered.current = true
+    setLoading(true)
+    fetch(`/api/airport-flights/${ident}`)
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [ident])
+
+  return { data, loading, load }
 }
 
 // Fetches actual departure/arrival info from the last 24 h of OpenSky flight records
