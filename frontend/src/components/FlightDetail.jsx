@@ -126,10 +126,19 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
   const depGate     = flightStatus?.departure?.gate
   const arrTerminal = flightStatus?.arrival?.terminal
   const arrGate     = flightStatus?.arrival?.gate
-  const fltStatus   = flightStatus?.status
-
   const fromInfo = airportMeta(airports, fromIcao)
   const toInfo   = airportMeta(airports, toIcao)
+
+  // Great-circle distance (nm) from current position to destination
+  const distNm = (() => {
+    if (!toInfo || f.lat == null || f.lon == null) return null
+    const R = 6371
+    const dLat = (toInfo.lat - f.lat) * Math.PI / 180
+    const dLon = (toInfo.lon - f.lon) * Math.PI / 180
+    const a = Math.sin(dLat / 2) ** 2
+      + Math.cos(f.lat * Math.PI / 180) * Math.cos(toInfo.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+    return Math.round(R * 2 * Math.asin(Math.sqrt(a)) * 0.539957)
+  })()
 
   return (
     <div className="flight-detail">
@@ -174,10 +183,7 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
 
       {/* ── Route card — compact ICAO codes, click to fly to airport ───── */}
       <div className="fd-card">
-        <div className="fd-card-label">
-          Route
-          {fltStatus && <span className="fd-flight-status">{fltStatus}</span>}
-        </div>
+        <div className="fd-card-label">Route</div>
         {(fromIcao || toIcao) ? (
           <div className="fd-rte-row">
             {/* Departure */}
@@ -197,11 +203,14 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
               )}
             </button>
 
-            {/* Connector arrow */}
+            {/* Connector arrow + distance */}
             <div className="fd-rte-line">
               <div className="fd-rte-dash" />
               <span className="fd-rte-icon">✈</span>
               <div className="fd-rte-dash" />
+              {distNm != null && (
+                <span className="fd-rte-dist">{distNm.toLocaleString()} nm</span>
+              )}
             </div>
 
             {/* Arrival */}

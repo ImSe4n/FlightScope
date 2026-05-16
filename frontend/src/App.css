@@ -978,9 +978,15 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 .fd-rte-line {
   display: flex; align-items: center; flex-shrink: 0;
   gap: 2px; margin-top: 8px;
+  position: relative;
 }
 .fd-rte-dash { width: 12px; height: 1px; background: var(--border-h); }
 .fd-rte-icon { font-size: 11px; color: var(--txt-3); }
+.fd-rte-dist {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  font-size: 9px; color: var(--txt-3); white-space: nowrap;
+  font-family: var(--mono); margin-top: 2px;
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    AIRPORT POPUP — INFO / FLIGHTS TABS
