@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { EMERGENCY_SQUAWKS, SOURCE_TYPES } from '../utils/constants'
 import AircraftPhoto from './AircraftPhoto'
 import { useAircraftInfo, useRoute, useFlightHistory, useFlightStatus } from '../hooks/useFlights'
@@ -84,7 +84,14 @@ function AltitudeProfile({ track }) {
   )
 }
 
-export default function FlightDetail({ flight: f, onClose, airports, track, onAirportSelect }) {
+function fmtDur(ms) {
+  if (ms <= 0) return '0m'
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+export default function FlightDetail({ flight: f, onClose, airports, track, onAirportSelect, followMode, onToggleFollow, showTrack, onToggleTrack, on3D }) {
   const sq        = String(f.squawk)
   const emergency = EMERGENCY_SQUAWKS[sq]
   const source    = SOURCE_TYPES[f.source] ?? 'Unknown'
@@ -140,6 +147,39 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
     return Math.round(R * 2 * Math.asin(Math.sqrt(a)) * 0.539957)
   })()
 
+  // Distance-based flight progress (accurate even when ETA is stale)
+  const [progressPct, progressElapsed, progressRemaining] = useMemo(() => {
+    if (!fromInfo || !toInfo || distNm == null || f.lat == null) return [null, null, null]
+
+    // Total great-circle distance departure → arrival (nm)
+    const R = 6371
+    const dLat = (toInfo.lat - fromInfo.lat) * Math.PI / 180
+    const dLon = (toInfo.lon - fromInfo.lon) * Math.PI / 180
+    const a = Math.sin(dLat / 2) ** 2
+      + Math.cos(fromInfo.lat * Math.PI / 180) * Math.cos(toInfo.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+    const totalNm = R * 2 * Math.asin(Math.sqrt(a)) * 0.539957
+    if (totalNm < 10) return [null, null, null]
+
+    const pct = Math.min(100, Math.max(0, (totalNm - distNm) / totalNm * 100))
+
+    // Elapsed from actual/scheduled departure
+    let elapsed = null
+    const depStr = flightStatus?.departure?.actual ?? flightStatus?.departure?.scheduled
+    if (depStr) {
+      try { elapsed = fmtDur(Math.max(0, Date.now() - new Date(depStr.replace(' ', 'T')).getTime())) }
+      catch { /* ignore */ }
+    }
+
+    // Remaining from current speed + distance (live, not from stale ETA)
+    let remaining = null
+    const speedKts = f.speed != null ? f.speed * 1.94384 : 0
+    if (speedKts > 50 && distNm > 0) {
+      remaining = fmtDur(distNm / speedKts * 3_600_000)
+    }
+
+    return [pct, elapsed, remaining]
+  }, [fromInfo, toInfo, distNm, f.lat, f.speed, flightStatus])
+
   return (
     <div className="flight-detail">
 
@@ -179,6 +219,50 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
           <span className="fd-stat-val">{f.heading != null ? Math.round(f.heading) + '°' : '—'}</span>
           <span className="fd-stat-unit">hdg</span>
         </div>
+      </div>
+
+      {/* ── Action buttons ──────────────────────────────────────────────── */}
+      <div className="fd-actions">
+        <button
+          className={`fd-action${followMode ? ' fd-action--active' : ''}`}
+          onClick={onToggleFollow}
+          title="Auto-pan map to keep this flight centred"
+        >
+          <span className="fd-action-icon">⊙</span>
+          Follow
+        </button>
+        <button
+          className={`fd-action${showTrack === false ? ' fd-action--muted' : ''}`}
+          onClick={onToggleTrack}
+          title="Toggle flight path overlay"
+        >
+          <span className="fd-action-icon">╌</span>
+          Route
+        </button>
+        <button
+          className="fd-action"
+          onClick={() => on3D?.({ flight: f, fromIcao, toIcao })}
+          title="Open 3D globe view"
+        >
+          <span className="fd-action-icon">🌐</span>
+          3D
+        </button>
+        <button
+          className="fd-action"
+          onClick={() => {
+            const parts = [
+              callsign,
+              f.icao24?.toUpperCase(),
+              fromIcao && toIcao ? `${fromIcao}→${toIcao}` : '',
+              f.lat != null ? `${f.lat.toFixed(4)},${f.lon.toFixed(4)}` : '',
+            ].filter(Boolean)
+            navigator.clipboard?.writeText(parts.join(' | '))
+          }}
+          title="Copy flight info to clipboard"
+        >
+          <span className="fd-action-icon">↗</span>
+          Share
+        </button>
       </div>
 
       {/* ── Route card — compact ICAO codes, click to fly to airport ───── */}
@@ -236,6 +320,21 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
         {route?.operatorCode && (
           <div className="fd-route-op">Operator: {route.operatorCode}
             {route.flightNumber ? ` · Flight ${route.flightNumber}` : ''}
+          </div>
+        )}
+
+        {/* Flight progress bar */}
+        {progressPct != null && (
+          <div className="fd-progress">
+            <div className="fd-progress-bar">
+              <div className="fd-progress-fill" style={{ width: `${progressPct}%` }} />
+              <div className="fd-progress-dot" style={{ left: `calc(${progressPct}% - 4px)` }} />
+            </div>
+            <div className="fd-progress-times">
+              <span className="fd-progress-elapsed">{progressElapsed} elapsed</span>
+              <span className="fd-progress-pct">{Math.round(progressPct)}%</span>
+              <span className="fd-progress-remain">{progressRemaining} left</span>
+            </div>
           </div>
         )}
       </div>

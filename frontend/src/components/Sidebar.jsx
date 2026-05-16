@@ -10,6 +10,7 @@ export default function Sidebar({
   filters, onFilterChange, onClearFilters, hasFilters,
   countries, airlines, emergencies,
   airports, track, onAirportSelect,
+  followMode, onToggleFollow, showTrack, onToggleTrack, on3D,
 }) {
   const [tab, setTab] = useState('flights')
 
@@ -22,7 +23,18 @@ export default function Sidebar({
       {/* Detail view replaces the whole content area when a flight is selected */}
       {selected ? (
         <div className="sb-main">
-          <FlightDetail flight={selected} onClose={onDeselect} airports={airports} track={track} onAirportSelect={onAirportSelect} />
+          <FlightDetail
+            flight={selected}
+            onClose={onDeselect}
+            airports={airports}
+            track={track}
+            onAirportSelect={onAirportSelect}
+            followMode={followMode}
+            onToggleFollow={onToggleFollow}
+            showTrack={showTrack}
+            onToggleTrack={onToggleTrack}
+            on3D={on3D}
+          />
         </div>
       ) : (
         <>

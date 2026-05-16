@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo, useTransition, useCallback, memo } from 'react'
+import { useState, useEffect, useMemo, useTransition, useCallback, memo, lazy, Suspense } from 'react'
 import { useFlights, useAirports, useTrack, useDeadReckonedFlights } from './hooks/useFlights'
 import Header   from './components/Header'
 import Sidebar  from './components/Sidebar'
 import MapView  from './components/MapView'
 import './App.css'
+
+const Globe3DModal = lazy(() => import('./components/Globe3DModal'))
 
 const DEFAULT_FILTERS = {
   query:         '',
@@ -32,6 +34,8 @@ const MemoSidebar = memo(Sidebar, (prev, next) =>
   prev.airlines         === next.airlines         &&
   prev.airports         === next.airports         &&
   prev.track            === next.track            &&
+  prev.followMode       === next.followMode       &&
+  prev.showTrack        === next.showTrack        &&
   prev.onAirportSelect  === next.onAirportSelect
 )
 
@@ -40,10 +44,13 @@ export default function App() {
   const airports   = useAirports()
   const drFlights  = useDeadReckonedFlights(flights)  // smoothly interpolated
 
-  const [filters,   setFilters]   = useState(DEFAULT_FILTERS)
-  const [selected,  setSelected]  = useState(null)
-  const [flyTarget, setFlyTarget] = useState(null)
-  const [mapLayer,  setMapLayer]  = useState('dark')
+  const [filters,    setFilters]    = useState(DEFAULT_FILTERS)
+  const [selected,   setSelected]   = useState(null)
+  const [flyTarget,  setFlyTarget]  = useState(null)
+  const [mapLayer,   setMapLayer]   = useState('dark')
+  const [followMode, setFollowMode] = useState(false)
+  const [showTrack,  setShowTrack]  = useState(true)
+  const [globe3D,    setGlobe3D]    = useState(null)  // { flight, fromIcao, toIcao }
 
   const [, startTransition] = useTransition()
 
@@ -62,9 +69,9 @@ export default function App() {
     if (fresh) setSelected(fresh)
   }, [flights])
 
-  // Escape key → deselect
+  // Escape key → deselect + cancel follow
   useEffect(() => {
-    const h = e => { if (e.key === 'Escape') setSelected(null) }
+    const h = e => { if (e.key === 'Escape') { setSelected(null); setFollowMode(false) } }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
   }, [])
@@ -128,6 +135,17 @@ export default function App() {
     if (f?.lat && f?.lon) setFlyTarget(f)
   }, [])
 
+  const handleDeselect = useCallback(() => {
+    setSelected(null)
+    setFollowMode(false)
+  }, [])
+
+  const handleToggleFollow = useCallback(() => setFollowMode(v => !v), [])
+  const handleToggleTrack  = useCallback(() => setShowTrack(v => !v),  [])
+  const handle3D = useCallback(data => {
+    setGlobe3D({ ...data, track })
+  }, [track])
+
   const handleAirportSelect = useCallback(a => {
     setSelected(null)
     setFlyTarget({ lat: a.lat, lon: a.lon, zoom: 13 })
@@ -165,7 +183,7 @@ export default function App() {
           totalFlights={flights.length}
           selected={selected}
           onSelect={handleSelect}
-          onDeselect={() => setSelected(null)}
+          onDeselect={handleDeselect}
           filters={filters}
           onFilterChange={updateFilter}
           onClearFilters={clearFilters}
@@ -176,6 +194,11 @@ export default function App() {
           airports={airports}
           track={track}
           onAirportSelect={handleAirportSelect}
+          followMode={followMode}
+          onToggleFollow={handleToggleFollow}
+          showTrack={showTrack}
+          onToggleTrack={handleToggleTrack}
+          on3D={handle3D}
         />
 
         <MapView
@@ -188,10 +211,24 @@ export default function App() {
           mapLayer={mapLayer}
           onSelect={handleSelect}
           onFlightSelect={handleSelect}
-          onDeselect={() => setSelected(null)}
-          track={track}
+          onDeselect={handleDeselect}
+          track={showTrack ? track : null}
+          followMode={followMode}
         />
       </div>
+
+      {globe3D && (
+        <Suspense fallback={null}>
+          <Globe3DModal
+            flight={globe3D.flight}
+            fromIcao={globe3D.fromIcao}
+            toIcao={globe3D.toIcao}
+            track={globe3D.track}
+            airports={airports}
+            onClose={() => setGlobe3D(null)}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

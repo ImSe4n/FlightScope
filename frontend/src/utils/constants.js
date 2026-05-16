@@ -17,7 +17,23 @@ export const TILE_LAYERS = {
     label: 'Satellite',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: '&copy; Esri &mdash; Source: Esri, USGS, NGA',
-    subdomains: 'abc',
+  },
+  hybrid: {
+    label: 'Hybrid',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri',
+    overlay: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  },
+  terrain: {
+    label: 'Terrain',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri, USGS, NOAA',
+  },
+  roadmap: {
+    label: 'Roadmap',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains: 'abcd',
   },
   street: {
     label: 'Street',
