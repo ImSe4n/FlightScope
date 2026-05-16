@@ -213,7 +213,7 @@ function RadarLayer() {
 }
 
 // ── Imperative flight layer ───────────────────────────────────────────────────
-function FlightLayer({ flights, onSelect }) {
+const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
   const map        = useMap()
   const clusterRef = useRef(null)
   const markersRef = useRef(new Map())
@@ -259,17 +259,6 @@ function FlightLayer({ flights, onSelect }) {
     }
     if (toRemove.length) cg.removeLayers(toRemove)
 
-    const movers   = []
-    const moverSet = new Set()
-    for (const [id, f] of wanted) {
-      const e = existing.get(id)
-      if (!e) continue
-      if (Math.abs(f.lat - e.flight.lat) > 0.001 || Math.abs(f.lon - e.flight.lon) > 0.001) {
-        movers.push(e.marker); moverSet.add(e.marker)
-      }
-    }
-    if (movers.length) cg.removeLayers(movers)
-
     const toAdd = []
     for (const [id, f] of wanted) {
       const isEmg  = Boolean(EMERGENCY_SQUAWKS[String(f.squawk)])
@@ -279,12 +268,13 @@ function FlightLayer({ flights, onSelect }) {
       const e      = existing.get(id)
 
       if (e) {
-        if (moverSet.has(e.marker)) { e.marker.setLatLng([f.lat, f.lon]); toAdd.push(e.marker) }
+        // Snap to latest API position; DR timer takes over from here
+        e.marker.setLatLng([f.lat, f.lon])
+        e.flight = f
         if (newHb !== e.prevHb || String(f.squawk) !== e.prevSq || newAb !== e.prevAb || newCat !== e.prevCat) {
           e.marker.setIcon(isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt, newCat))
           e.prevHb = newHb; e.prevSq = String(f.squawk); e.prevAb = newAb; e.prevCat = newCat
         }
-        e.flight = f
       } else {
         const icon   = isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt, newCat)
         const marker = L.marker([f.lat, f.lon], { icon })
@@ -298,11 +288,31 @@ function FlightLayer({ flights, onSelect }) {
     if (toAdd.length) cg.addLayers(toAdd)
   }, [map])
 
+  // Imperative DR timer — moves markers via setLatLng every 500 ms, zero React re-renders
+  useEffect(() => {
+    const id = setInterval(() => {
+      const nowSec = Date.now() / 1000
+      for (const [, entry] of markersRef.current) {
+        const f = entry.flight
+        if (f.onGround || !f.speed || f.heading == null || f.lat == null || !f.timePos) continue
+        const dt = Math.min(Math.max(0, nowSec - f.timePos), 300)
+        if (dt <= 0) continue
+        const s      = dt * f.speed
+        const hdR    = f.heading * (Math.PI / 180)
+        const cosLat = Math.cos(f.lat * (Math.PI / 180)) || 1e-9
+        const dLat   = (s * Math.cos(hdR) / 6_371_000) * (180 / Math.PI)
+        const dLon   = (s * Math.sin(hdR) / (6_371_000 * cosLat)) * (180 / Math.PI)
+        entry.marker.setLatLng([f.lat + dLat, f.lon + dLon])
+      }
+    }, 500)
+    return () => clearInterval(id)
+  }, [])
+
   useEffect(() => { sync() }, [flights, sync])
   useMapEvents({ moveend: sync, zoomend: sync })
 
   return null
-}
+})
 
 // ── Airport layer — zoom-based tier filtering ─────────────────────────────────
 function AirportLayer({ airports, liveFlights, onFlightSelect }) {
@@ -396,14 +406,12 @@ function AltLegend() {
 }
 
 // ── Selected-flight marker ────────────────────────────────────────────────────
-function SelectedMarker({ selected, flights }) {
-  const dr  = selected ? flights.find(f => f.icao24 === selected.icao24) : null
-  const pos = dr ?? selected
-  if (!pos?.lat || !pos?.lon) return null
+function SelectedMarker({ selectedPos }) {
+  if (!selectedPos?.lat || !selectedPos?.lon) return null
   return (
     <Marker
-      position={[pos.lat, pos.lon]}
-      icon={makeSelectedIcon(pos.heading)}
+      position={[selectedPos.lat, selectedPos.lon]}
+      icon={makeSelectedIcon(selectedPos.heading)}
       zIndexOffset={1000}
     />
   )
@@ -457,6 +465,12 @@ export default function MapView({ flights, airports, selected, selectedPos, live
   const [overlays, setOverlays] = useState({ terminator: false, atcBounds: false, radar: false })
   const [layerPanelOpen, setLayerPanelOpen] = useState(false)
 
+  // Exclude selected flight from cluster layer (SelectedMarker renders it separately)
+  const layerFlights = useMemo(
+    () => selected ? flights.filter(f => f.icao24 !== selected.icao24) : flights,
+    [flights, selected],
+  )
+
   return (
     <div className="map-wrap">
       <MapContainer
@@ -487,11 +501,8 @@ export default function MapView({ flights, airports, selected, selectedPos, live
         {overlays.radar      && <RadarLayer />}
 
         <TrackLayer track={track} selectedPos={selectedPos} />
-        <FlightLayer
-          flights={selected ? flights.filter(f => f.icao24 !== selected.icao24) : flights}
-          onSelect={onSelect}
-        />
-        <SelectedMarker selected={selected} flights={flights} />
+        <FlightLayer flights={layerFlights} onSelect={onSelect} />
+        <SelectedMarker selectedPos={selectedPos} />
         <AirportLayer airports={airports} liveFlights={liveFlights} onFlightSelect={onFlightSelect} />
       </MapContainer>
 

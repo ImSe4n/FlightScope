@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useTransition, useCallback, memo, lazy, Suspense } from 'react'
-import { useFlights, useAirports, useTrack, useDeadReckonedFlights } from './hooks/useFlights'
+import { useFlights, useAirports, useTrack, useDrFlight } from './hooks/useFlights'
 import Header   from './components/Header'
 import Sidebar  from './components/Sidebar'
 import MapView  from './components/MapView'
@@ -42,7 +42,6 @@ const MemoSidebar = memo(Sidebar, (prev, next) =>
 export default function App() {
   const { flights, error } = useFlights()
   const airports   = useAirports()
-  const drFlights  = useDeadReckonedFlights(flights)  // smoothly interpolated
 
   const [filters,    setFilters]    = useState(DEFAULT_FILTERS)
   const [selected,   setSelected]   = useState(null)
@@ -56,11 +55,8 @@ export default function App() {
 
   const { track } = useTrack(selected?.icao24)
 
-  // DR'd version of the selected flight — updates every 500 ms for smooth tracking.
-  const drSelected = useMemo(
-    () => selected ? (drFlights.find(f => f.icao24 === selected.icao24) ?? selected) : null,
-    [selected, drFlights],
-  )
+  // DR'd version of selected flight only — updates every 500 ms, no full-array scan.
+  const drSelected = useDrFlight(selected)
 
   // Keep the selected flight fresh on every auto-refresh
   useEffect(() => {
@@ -109,13 +105,6 @@ export default function App() {
     }
     return r
   }, [flights, filters])
-
-  // Dead-reckoned subset for the map — same filter set, smoothed positions
-  const filteredIds  = useMemo(() => new Set(filtered.map(f => f.icao24)), [filtered])
-  const drFiltered   = useMemo(
-    () => drFlights.filter(f => filteredIds.has(f.icao24)),
-    [drFlights, filteredIds],
-  )
 
   const emergencies = useMemo(
     () => flights.filter(f => ['7500','7600','7700'].includes(String(f.squawk))),
@@ -202,7 +191,7 @@ export default function App() {
         />
 
         <MapView
-          flights={drFiltered}
+          flights={filtered}
           airports={airports}
           selected={selected}
           selectedPos={drSelected}

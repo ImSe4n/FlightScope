@@ -56,40 +56,24 @@ function _drOne(f, dt) {
   }
 }
 
-/**
- * Returns a smoothly-interpolated version of `flights` updated every 500 ms.
- * When fresh API data arrives, positions are immediately corrected using `timePos`
- * (the actual fix timestamp) so there is no blend-induced backwards movement.
- */
-export function useDeadReckonedFlights(flights) {
-  const sRef = useRef({ base: [], baseAt: Date.now() })
+// Dead-reckons a single flight — lightweight, used for the selected-flight marker only.
+export function useDrFlight(flight) {
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    const nowMs  = Date.now()
-    const nowSec = nowMs / 1000
-    // Immediately advance each flight to "now" using its reported fix time,
-    // so the starting point is already current — no backwards-blend needed.
-    const corrected = flights.map(f => {
-      if (f.onGround || !f.speed || f.heading == null || f.lat == null || !f.timePos) return f
-      const stale = Math.max(0, Math.min(nowSec - f.timePos, _MAX_DT))
-      return stale > 0 ? _drOne(f, stale) : f
-    })
-    sRef.current = { base: corrected, baseAt: nowMs }
-    setTick(t => t + 1)
-  }, [flights])
-
-  useEffect(() => {
+    if (!flight) return
     const id = setInterval(() => setTick(t => t + 1), 500)
     return () => clearInterval(id)
-  }, [])
+  }, [flight])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => {
-    const { base, baseAt } = sRef.current
-    const dt = (Date.now() - baseAt) / 1000
-    return base.map(f => _drOne(f, dt))
-  }, [tick])
+    if (!flight) return null
+    const dt = flight.timePos != null
+      ? Math.min(Math.max(0, Date.now() / 1000 - flight.timePos), _MAX_DT)
+      : 0
+    return _drOne(flight, dt)
+  }, [flight, tick])
 }
 
 export function useAirports() {
