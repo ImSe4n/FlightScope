@@ -47,18 +47,13 @@ export default function App() {
 
   const [, startTransition] = useTransition()
 
-  const { track: rawTrack } = useTrack(selected?.icao24)
+  const { track } = useTrack(selected?.icao24)
 
-  // Bridge the gap between the historical track and the live position so the
-  // trail actually connects to the plane icon instead of ending behind it.
-  const track = useMemo(() => {
-    if (!rawTrack || !selected?.lat || !selected?.lon) return rawTrack
-    const last = rawTrack[rawTrack.length - 1]
-    const now  = Math.floor(Date.now() / 1000)
-    if (!last || now <= (last[0] ?? 0) + 30) return rawTrack
-    // [time, lat, lon, baro_alt, geo_alt, on_ground]
-    return [...rawTrack, [now, selected.lat, selected.lon, selected.alt ?? null, selected.geoAlt ?? null, selected.onGround ? 1 : 0]]
-  }, [rawTrack, selected])
+  // DR'd version of the selected flight — updates every 500 ms for smooth tracking.
+  const drSelected = useMemo(
+    () => selected ? (drFlights.find(f => f.icao24 === selected.icao24) ?? selected) : null,
+    [selected, drFlights],
+  )
 
   // Keep the selected flight fresh on every auto-refresh
   useEffect(() => {
@@ -128,10 +123,10 @@ export default function App() {
   }), [flights, emergencies])
 
   // ── Handlers ─────────────────────────────────────────────────────────────
-  const handleSelect = f => {
+  const handleSelect = useCallback(f => {
     setSelected(f)
     if (f?.lat && f?.lon) setFlyTarget(f)
-  }
+  }, [])
 
   const handleAirportSelect = useCallback(a => {
     setSelected(null)
@@ -187,9 +182,12 @@ export default function App() {
           flights={drFiltered}
           airports={airports}
           selected={selected}
+          selectedPos={drSelected}
+          liveFlights={flights}
           flyTarget={flyTarget}
           mapLayer={mapLayer}
           onSelect={handleSelect}
+          onFlightSelect={handleSelect}
           onDeselect={() => setSelected(null)}
           track={track}
         />

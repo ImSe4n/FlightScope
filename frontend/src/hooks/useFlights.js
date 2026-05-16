@@ -38,15 +38,13 @@ export function useFlights() {
 // ── Dead-reckoning helpers ─────────────────────────────────────────────────────
 const _R      = 6_371_000   // Earth radius, metres
 const _MAX_DT = 300         // cap extrapolation at 5 minutes
-const _TRANS  = 2_000       // blend duration (ms) when fresh API data arrives
 
-// Dead-reckon a single flight by `dt` seconds.
 function _drOne(f, dt) {
   if (f.onGround || !f.speed || f.heading == null || f.lat == null) return f
-  const s     = Math.min(dt, _MAX_DT) * f.speed          // metres travelled
-  const hdRad = f.heading * (Math.PI / 180)
-  const dLat  = (s * Math.cos(hdRad)) / _R               // radians
-  const dLon  = (s * Math.sin(hdRad)) / (_R * Math.cos(f.lat * (Math.PI / 180)))
+  const s      = Math.min(Math.max(0, dt), _MAX_DT) * f.speed
+  const hdRad  = f.heading * (Math.PI / 180)
+  const dLat   = (s * Math.cos(hdRad)) / _R
+  const dLon   = (s * Math.sin(hdRad)) / (_R * Math.cos(f.lat * (Math.PI / 180)))
   const newAlt = f.alt != null && f.vertRate != null
     ? Math.max(0, f.alt + f.vertRate * Math.min(dt, _MAX_DT))
     : f.alt
@@ -58,55 +56,29 @@ function _drOne(f, dt) {
   }
 }
 
-// Quadratic ease-out so the transition from old→new feels natural.
-function _easeOut(t) { return 1 - (1 - t) ** 2 }
-
 /**
- * Returns a version of `flights` with positions smoothly interpolated every
- * 500 ms.  When fresh API data arrives, apparent positions (already DR'd) are
- * used as the blend-from point so there is no visible jump.
+ * Returns a smoothly-interpolated version of `flights` updated every 500 ms.
+ * When fresh API data arrives, positions are immediately corrected using `timePos`
+ * (the actual fix timestamp) so there is no blend-induced backwards movement.
  */
 export function useDeadReckonedFlights(flights) {
-  // Ref holds the single source of truth; mutation is safe because useMemo
-  // below reads it on every tick.
-  const sRef = useRef({
-    base:      flights,
-    baseAt:    Date.now(),
-    transFrom: null,   // Map<icao24, {lat,lon,alt}> — positions at blend start
-    transAt:   null,
-  })
+  const sRef = useRef({ base: [], baseAt: Date.now() })
   const [tick, setTick] = useState(0)
 
-  // When fresh API data arrives, snapshot current apparent positions as the
-  // blend-from state so the transition is seamless.
   useEffect(() => {
-    const now = Date.now()
-    const { base, baseAt, transFrom, transAt } = sRef.current
-    const dt = (now - baseAt) / 1000
-
-    const snap = new Map()
-    for (const f of base) {
-      const dr = _drOne(f, dt)
-      if (transFrom && transAt) {
-        const e = Math.min((now - transAt) / _TRANS, 1)
-        const p = transFrom.get(f.icao24)
-        if (p && e < 1) {
-          snap.set(f.icao24, {
-            lat: p.lat + (dr.lat - p.lat) * e,
-            lon: p.lon + (dr.lon - p.lon) * e,
-            alt: p.alt != null && dr.alt != null ? p.alt + (dr.alt - p.alt) * e : dr.alt,
-          })
-          continue
-        }
-      }
-      snap.set(f.icao24, { lat: dr.lat, lon: dr.lon, alt: dr.alt })
-    }
-
-    sRef.current = { base: flights, baseAt: now, transFrom: snap, transAt: now }
+    const nowMs  = Date.now()
+    const nowSec = nowMs / 1000
+    // Immediately advance each flight to "now" using its reported fix time,
+    // so the starting point is already current — no backwards-blend needed.
+    const corrected = flights.map(f => {
+      if (f.onGround || !f.speed || f.heading == null || f.lat == null || !f.timePos) return f
+      const stale = Math.max(0, Math.min(nowSec - f.timePos, _MAX_DT))
+      return stale > 0 ? _drOne(f, stale) : f
+    })
+    sRef.current = { base: corrected, baseAt: nowMs }
     setTick(t => t + 1)
   }, [flights])
 
-  // 500 ms animation tick
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 500)
     return () => clearInterval(id)
@@ -114,29 +86,9 @@ export function useDeadReckonedFlights(flights) {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => {
-    const now = Date.now()
-    const { base, baseAt, transFrom, transAt } = sRef.current
-    const dt = (now - baseAt) / 1000
-
-    return base.map(f => {
-      const dr = _drOne(f, dt)
-      if (transFrom && transAt) {
-        const elapsed = (now - transAt) / _TRANS
-        if (elapsed < 1) {
-          const p = transFrom.get(f.icao24)
-          if (p) {
-            const t = _easeOut(elapsed)
-            return {
-              ...dr,
-              lat: p.lat + (dr.lat - p.lat) * t,
-              lon: p.lon + (dr.lon - p.lon) * t,
-              alt: p.alt != null && dr.alt != null ? p.alt + (dr.alt - p.alt) * t : dr.alt,
-            }
-          }
-        }
-      }
-      return dr
-    })
+    const { base, baseAt } = sRef.current
+    const dt = (Date.now() - baseAt) / 1000
+    return base.map(f => _drOne(f, dt))
   }, [tick])
 }
 

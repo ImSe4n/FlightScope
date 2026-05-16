@@ -27,28 +27,27 @@ function MapClickHandler({ onDeselect }) {
 }
 
 // ── Flight path — one segment per point pair, coloured by altitude ────────────
-function TrackLayer({ track }) {
-  const map      = useMap()
-  const segsRef  = useRef([])
+function TrackLayer({ track, selectedPos }) {
+  const map     = useMap()
+  const segsRef = useRef([])
+  const extRef  = useRef(null)
 
+  // Historical segments — redraws only when track changes (not every 500 ms tick)
   useEffect(() => {
     segsRef.current.forEach(s => map.removeLayer(s))
     segsRef.current = []
-    if (!track || track.length < 2) return
+    if (extRef.current) { map.removeLayer(extRef.current); extRef.current = null }
 
+    if (!track || track.length < 2) return
     const valid = track.filter(p => p[1] != null && p[2] != null)
     if (valid.length < 2) return
 
     for (let i = 0; i < valid.length - 1; i++) {
       const [t1, lat1, lon1, alt1] = valid[i]
       const [t2, lat2, lon2]       = valid[i + 1]
-      // Skip segments where data is missing for > 15 minutes — these create
-      // false straight-line "bends" across large distances.
       if (t2 - t1 > 900) continue
       const seg = L.polyline([[lat1, lon1], [lat2, lon2]], {
-        color:   altColor(alt1),   // alt1 is already in metres — matches altBucket thresholds
-        weight:  3,
-        opacity: 0.85,
+        color: altColor(alt1), weight: 3, opacity: 0.85,
       })
       seg.addTo(map)
       segsRef.current.push(seg)
@@ -56,6 +55,32 @@ function TrackLayer({ track }) {
 
     return () => { segsRef.current.forEach(s => map.removeLayer(s)); segsRef.current = [] }
   }, [track, map])
+
+  // DR extension line — last track point → current DR'd plane position.
+  // Updates every 500 ms via setLatLngs (no remove/re-add).
+  useEffect(() => {
+    const valid = track?.filter(p => p[1] != null && p[2] != null)
+    const last  = valid?.at(-1)
+
+    if (!last || !selectedPos?.lat || !selectedPos?.lon) {
+      if (extRef.current) { map.removeLayer(extRef.current); extRef.current = null }
+      return
+    }
+
+    const latlngs = [[last[1], last[2]], [selectedPos.lat, selectedPos.lon]]
+    if (extRef.current) {
+      extRef.current.setLatLngs(latlngs)
+    } else {
+      extRef.current = L.polyline(latlngs, {
+        color: '#7c93af', weight: 2, opacity: 0.5, dashArray: '5 5',
+      }).addTo(map)
+    }
+  }, [selectedPos, track, map])
+
+  // Cleanup extension on unmount
+  useEffect(() => {
+    return () => { if (extRef.current) { map.removeLayer(extRef.current); extRef.current = null } }
+  }, [map])
 
   return null
 }
@@ -157,9 +182,7 @@ function FlightLayer({ flights, onSelect }) {
 }
 
 // ── Airport layer — zoom-based tier filtering ─────────────────────────────────
-// tier 1 (~60 major global hubs): always shown
-// tier 2 (remaining large airports): shown only at zoom ≥ 4
-function AirportLayer({ airports }) {
+function AirportLayer({ airports, liveFlights, onFlightSelect }) {
   const map = useMap()
   const [zoom, setZoom] = useState(() => map.getZoom())
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) })
@@ -169,13 +192,13 @@ function AirportLayer({ airports }) {
     [airports, zoom],
   )
 
-  return <>{visible.map(a => <AirportMarker key={a.ident} a={a} />)}</>
+  return <>{visible.map(a => (
+    <AirportMarker key={a.ident} a={a} liveFlights={liveFlights} onFlightSelect={onFlightSelect} />
+  ))}</>
 }
 
 // ── Airport marker with lazy-loaded enrichment ────────────────────────────────
-// Details (weather, image, runways, METAR) are only fetched the first time
-// the user clicks the marker — basic info shows immediately.
-const AirportMarker = memo(function AirportMarker({ a }) {
+const AirportMarker = memo(function AirportMarker({ a, liveFlights, onFlightSelect }) {
   const [detail,  setDetail]  = useState(null)
   const [loading, setLoading] = useState(false)
   const triggered = useRef(false)
@@ -199,7 +222,7 @@ const AirportMarker = memo(function AirportMarker({ a }) {
       eventHandlers={{ click: handleClick }}
     >
       <Popup maxWidth={380}>
-        <AirportPopup a={merged} loading={loading} />
+        <AirportPopup a={merged} loading={loading} liveFlights={liveFlights} onFlightSelect={onFlightSelect} />
       </Popup>
     </Marker>
   )
@@ -265,7 +288,7 @@ function SelectedMarker({ selected, flights }) {
 }
 
 // ── Main exported component ───────────────────────────────────────────────────
-export default function MapView({ flights, airports, selected, flyTarget, mapLayer, onSelect, onDeselect, track }) {
+export default function MapView({ flights, airports, selected, selectedPos, liveFlights, flyTarget, mapLayer, onSelect, onFlightSelect, onDeselect, track }) {
   const layer = TILE_LAYERS[mapLayer] ?? TILE_LAYERS.dark
 
   return (
@@ -288,12 +311,12 @@ export default function MapView({ flights, airports, selected, flyTarget, mapLay
           maxZoom={19}
         />
 
-        <TrackLayer track={track} />
+        <TrackLayer track={track} selectedPos={selectedPos} />
         <FlightLayer flights={flights} onSelect={onSelect} />
 
         <SelectedMarker selected={selected} flights={flights} />
 
-        <AirportLayer airports={airports} />
+        <AirportLayer airports={airports} liveFlights={liveFlights} onFlightSelect={onFlightSelect} />
       </MapContainer>
 
       <AltLegend />

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { EMERGENCY_SQUAWKS } from '../utils/constants'
 import { useAirportFlights } from '../hooks/useFlights'
 
@@ -156,16 +156,31 @@ function AirportInfoTab({ a, loading }) {
   )
 }
 
+// ── Status badge for airport flight rows ─────────────────────────────────────
+function ApfBadge({ status }) {
+  if (!status) return null
+  if (status === 'live')   return <span className="apf-badge apf-badge--live">LIVE</span>
+  if (status === 'ground') return <span className="apf-badge apf-badge--ground">TAXI</span>
+  if (status === 'recent') return <span className="apf-badge apf-badge--recent">REC</span>
+  return null
+}
+
 // ── Airport flights tab content ────────────────────────────────────────────────
-function AirportFlightsTab({ ident }) {
+function AirportFlightsTab({ ident, liveFlights, onFlightSelect }) {
   const { data, loading, load } = useAirportFlights(ident)
   const [sub, setSub] = useState('dep')
 
-  // Trigger load once when this tab mounts
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [])
 
+  // Build a quick lookup: icao24 → live flight object
+  const liveMap = useMemo(
+    () => new Map((liveFlights ?? []).map(f => [f.icao24, f])),
+    [liveFlights],
+  )
+
   const list = sub === 'dep' ? (data?.departures ?? []) : (data?.arrivals ?? [])
+  const nowSec = Date.now() / 1000
 
   return (
     <div className="apf-wrap">
@@ -194,21 +209,29 @@ function AirportFlightsTab({ ident }) {
         <div className="apf-list">
           {list.map((fl, i) => {
             const cs      = fl.callsign?.trim() || fl.icao24 || '—'
-            const partner = sub === 'dep'
-              ? fl.estArrivalAirport
-              : fl.estDepartureAirport
-            const ts = sub === 'dep'
-              ? tsHHMM(fl.firstSeen)
-              : tsHHMM(fl.lastSeen)
+            const partner = sub === 'dep' ? fl.estArrivalAirport : fl.estDepartureAirport
+            const ts      = sub === 'dep' ? tsHHMM(fl.firstSeen) : tsHHMM(fl.lastSeen)
+            const liveF   = liveMap.get(fl.icao24)
+            const lastSeen = fl.lastSeen ?? fl.firstSeen ?? 0
+            const status  = liveF
+              ? (liveF.onGround ? 'ground' : 'live')
+              : ((nowSec - lastSeen) < 7_200 ? 'recent' : null)
+            const clickable = !!liveF
 
             return (
-              <div key={i} className="apf-row">
+              <div
+                key={i}
+                className={`apf-row${clickable ? ' apf-row--live' : ''}`}
+                onClick={clickable ? () => onFlightSelect?.(liveF) : undefined}
+                title={clickable ? 'Click to track this flight' : undefined}
+              >
                 <span className="apf-cs">{cs}</span>
                 <span className="apf-route">
                   {sub === 'dep' ? '→ ' : '← '}
                   <span className="apf-airport">{partner || '—'}</span>
                 </span>
                 <span className="apf-time">{ts}</span>
+                <ApfBadge status={status} />
               </div>
             )
           })}
@@ -219,13 +242,12 @@ function AirportFlightsTab({ ident }) {
 }
 
 // ── Main airport popup ─────────────────────────────────────────────────────────
-export function AirportPopup({ a, loading = false }) {
+export function AirportPopup({ a, loading = false, liveFlights, onFlightSelect }) {
   const [tab, setTab] = useState('info')
 
   return (
     <div className="popup airport-popup">
 
-      {/* Wikipedia image — only on info tab */}
       {tab === 'info' && a.image && (
         <div className="popup-img-wrap">
           <img src={a.image} alt={a.name} />
@@ -233,7 +255,6 @@ export function AirportPopup({ a, loading = false }) {
       )}
 
       <div className="popup-airport-body">
-        {/* Header */}
         <div className="popup-title">{a.name}</div>
         <div className="popup-sub">
           {a.ident}
@@ -242,7 +263,6 @@ export function AirportPopup({ a, loading = false }) {
           {a.country && ` · ${a.country}`}
         </div>
 
-        {/* Top-level tabs */}
         <div className="ap-tabs">
           <button
             className={`ap-tab${tab === 'info'    ? ' ap-tab--active' : ''}`}
@@ -259,7 +279,13 @@ export function AirportPopup({ a, loading = false }) {
         </div>
 
         {tab === 'info'    && <AirportInfoTab a={a} loading={loading} />}
-        {tab === 'flights' && <AirportFlightsTab ident={a.ident} />}
+        {tab === 'flights' && (
+          <AirportFlightsTab
+            ident={a.ident}
+            liveFlights={liveFlights}
+            onFlightSelect={onFlightSelect}
+          />
+        )}
       </div>
     </div>
   )
