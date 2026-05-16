@@ -3,6 +3,7 @@ import { useFlights, useAirports, useTrack, useDrFlight } from './hooks/useFligh
 import Header   from './components/Header'
 import Sidebar  from './components/Sidebar'
 import MapView  from './components/MapView'
+import AIChat   from './components/AIChat'
 import './App.css'
 
 const Globe3DModal = lazy(() => import('./components/Globe3DModal'))
@@ -218,6 +219,8 @@ export default function App() {
           />
         </Suspense>
       )}
+
+      <AIChat flights={flights} selected={selected} />
     </div>
   )
 }

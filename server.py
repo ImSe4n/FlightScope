@@ -16,17 +16,19 @@ from fastapi.staticfiles import StaticFiles
 
 from api.opensky  import router as flights_router
 from api.airports import router as airports_router
+from api.ai       import router as ai_router
 
 app = FastAPI(title="FlightScope API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 app.include_router(flights_router)
 app.include_router(airports_router)
+app.include_router(ai_router)
 
 # ── Serve React build in production ───────────────────────────────────────────
 _dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")

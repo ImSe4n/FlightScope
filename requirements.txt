@@ -4,6 +4,7 @@ uvicorn==0.30.6
 requests==2.31.0
 pandas==2.1.4
 python-dotenv==1.0.1
+huggingface_hub>=0.24.0
 
 # Desktop app only (main.py) - install separately if needed
 # PySide6==6.6.0
