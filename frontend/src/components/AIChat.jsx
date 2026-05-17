@@ -4,61 +4,109 @@ const SUGGESTIONS = [
   'Are there any emergency flights right now?',
   'Which airline has the most flights?',
   'What\'s the average cruising altitude?',
-  'How many countries are currently in the air?',
+  'What does squawk 7700 mean?',
 ]
 
 const SELECTED_SUGGESTIONS = [
-  'Tell me about the selected flight.',
-  'Is this flight on time?',
-  'What type of aircraft is this?',
+  'Tell me about this flight.',
+  'What aircraft type is this?',
+  'Where is this flight going?',
+  'Is this flight climbing or descending?',
 ]
 
-function buildContext(flights, selected) {
+const SQUAWK_LABELS = { '7500': 'Hijacking', '7600': 'Radio Failure', '7700': 'General Emergency' }
+
+function buildContext(flights, selected, aircraftInfo, route) {
   const airborne  = flights.filter(f => !f.onGround)
   const onGround  = flights.filter(f =>  f.onGround)
   const emergency = flights.filter(f => ['7500','7600','7700'].includes(String(f.squawk)))
-  const countries = new Set(flights.map(f => f.origin).filter(Boolean)).size
 
-  // Airline counts
-  const counts = {}
+  const airlineCounts = {}
+  const countryCounts = {}
   for (const f of flights) {
     const code = f.callsign?.trim().toUpperCase().match(/^([A-Z]{3})\d/)?.[1]
-    if (code) counts[code] = (counts[code] || 0) + 1
+    if (code) airlineCounts[code] = (airlineCounts[code] || 0) + 1
+    if (f.origin) countryCounts[f.origin] = (countryCounts[f.origin] || 0) + 1
   }
-  const topAirlines = Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([c, n]) => `${c}(${n})`)
+  const topAirlines = Object.entries(airlineCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([c,n])=>`${c}(${n})`)
+  const topCountries = Object.entries(countryCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([c,n])=>`${c}(${n})`)
 
   const alts   = airborne.map(f => f.alt).filter(a => a != null)
   const speeds = airborne.map(f => f.speed).filter(s => s != null)
   const avgAlt   = alts.length   ? Math.round(alts.reduce((a,b)=>a+b,0)   / alts.length   * 3.28084) : null
   const avgSpeed = speeds.length ? Math.round(speeds.reduce((a,b)=>a+b,0) / speeds.length * 1.94384) : null
 
-  const ctx = { total: flights.length, inAir: airborne.length, onGround: onGround.length, countries, emergencies: emergency.length, topAirlines, avgAlt, avgSpeed }
+  const highAlt = airborne.filter(f => f.alt != null && f.alt * 3.28084 > 30000).length
+  const midAlt  = airborne.filter(f => f.alt != null && f.alt * 3.28084 >= 10000 && f.alt * 3.28084 <= 30000).length
+  const lowAlt  = airborne.filter(f => f.alt != null && f.alt * 3.28084 < 10000).length
+
+  const ctx = {
+    total: flights.length, inAir: airborne.length, onGround: onGround.length,
+    countries: new Set(flights.map(f => f.origin).filter(Boolean)).size,
+    emergencies: emergency.length, topAirlines, topCountries,
+    avgAlt, avgSpeed, altDist: { high: highAlt, mid: midAlt, low: lowAlt },
+  }
+
+  if (emergency.length > 0) {
+    ctx.emergencyFlights = emergency.slice(0, 5).map(f => ({
+      callsign: f.callsign?.trim() || f.icao24,
+      squawk:   String(f.squawk),
+      meaning:  SQUAWK_LABELS[String(f.squawk)] || 'Unknown',
+    }))
+  }
 
   if (selected) {
+    const vr = selected.vertRate != null ? Math.round(selected.vertRate * 196.85) : null
     ctx.selected = {
       callsign: selected.callsign?.trim() || selected.icao24,
+      icao24:   selected.icao24,
       alt:      selected.alt   != null ? Math.round(selected.alt   * 3.28084) : null,
       speed:    selected.speed != null ? Math.round(selected.speed * 1.94384) : null,
       heading:  selected.heading,
       origin:   selected.origin,
+      onGround: selected.onGround,
+      squawk:   selected.squawk || null,
+      vertRate: vr,
     }
+    if (aircraftInfo?.Registration)                                    ctx.selected.registration = aircraftInfo.Registration
+    if (aircraftInfo?.Type || aircraftInfo?.ICAOTypeCode)              ctx.selected.type         = aircraftInfo.Type || aircraftInfo.ICAOTypeCode
+    if (aircraftInfo?.RegisteredOwners || aircraftInfo?.Operator)      ctx.selected.operator     = aircraftInfo.RegisteredOwners || aircraftInfo.Operator
+    if (route?.route?.[0])                                             ctx.selected.from         = route.route[0]
+    if (route?.route?.[1])                                             ctx.selected.to           = route.route[1]
   }
 
   return ctx
 }
 
 export default function AIChat({ flights, selected }) {
-  const [open,     setOpen]     = useState(false)
-  const [messages, setMessages] = useState([
-    { role: 'assistant', text: "Hi! I'm FlightScope AI. Ask me anything about current global air traffic, or click a suggestion below." },
+  const [open,         setOpen]         = useState(false)
+  const [messages,     setMessages]     = useState([
+    { role: 'assistant', text: "Hi! I'm FlightScope AI. Ask me anything about current air traffic or aviation in general, or click a suggestion below." },
   ])
-  const [input,   setInput]   = useState('')
-  const [loading, setLoading] = useState(false)
+  const [input,        setInput]        = useState('')
+  const [loading,      setLoading]      = useState(false)
+  const [aircraftInfo, setAircraftInfo] = useState(null)
+  const [route,        setRoute]        = useState(null)
   const bottomRef = useRef(null)
   const inputRef  = useRef(null)
+
+  // Fetch aircraft type / registration and route when a flight is selected
+  useEffect(() => {
+    if (!selected?.icao24) { setAircraftInfo(null); setRoute(null); return }
+    fetch(`/api/aircraft/${selected.icao24}`)
+      .then(r => r.json())
+      .then(d => setAircraftInfo(d && Object.keys(d).length > 0 ? d : null))
+      .catch(() => setAircraftInfo(null))
+    const cs = selected.callsign?.trim()
+    if (cs) {
+      fetch(`/api/route/${cs}`)
+        .then(r => r.json())
+        .then(d => setRoute(d?.route?.length >= 2 ? d : null))
+        .catch(() => setRoute(null))
+    } else {
+      setRoute(null)
+    }
+  }, [selected?.icao24, selected?.callsign])
 
   useEffect(() => {
     if (open) {
@@ -77,7 +125,7 @@ export default function AIChat({ flights, selected }) {
       const res  = await fetch('/api/ai/chat', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ question: q, context: buildContext(flights, selected) }),
+        body:    JSON.stringify({ question: q, context: buildContext(flights, selected, aircraftInfo, route) }),
       })
       const data = await res.json()
       setMessages(m => [...m, { role: 'assistant', text: data.answer, error: data.error }])
@@ -86,7 +134,7 @@ export default function AIChat({ flights, selected }) {
     } finally {
       setLoading(false)
     }
-  }, [input, loading, flights, selected])
+  }, [input, loading, flights, selected, aircraftInfo, route])
 
   const suggestions = selected ? SELECTED_SUGGESTIONS : SUGGESTIONS
 
