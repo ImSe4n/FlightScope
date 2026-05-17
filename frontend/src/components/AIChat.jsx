@@ -108,7 +108,7 @@ export default function AIChat({ flights, selected }) {
               <span className="ai-panel-icon">✦</span>
               FlightScope AI
             </div>
-            <span className="ai-powered">Mistral · Hugging Face</span>
+            <span className="ai-powered">Qwen 2.5 · Hugging Face</span>
             <button className="ai-close" onClick={() => setOpen(false)}>✕</button>
           </div>
 

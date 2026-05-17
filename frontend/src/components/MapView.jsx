@@ -225,6 +225,8 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
   useEffect(() => {
     const cg = L.markerClusterGroup({
       chunkedLoading:          true,
+      chunkedLoadingSize:      300,   // process 300 markers per frame for faster initial load
+      chunkedLoadingDelay:     16,    // ~60 fps cadence
       maxClusterRadius:        55,
       animate:                 false,
       spiderfyOnMaxZoom:       true,
@@ -235,6 +237,8 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
     return () => { map.removeLayer(cg); clusterRef.current = null; markersRef.current.clear() }
   }, [map])
 
+  // Sync flight markers to the cluster group — no bounds filter so pan/zoom never triggers
+  // expensive add/remove cycles; Leaflet.markercluster handles viewport culling natively.
   const sync = useCallback(() => {
     const cg = clusterRef.current
     if (!cg) return
@@ -242,15 +246,9 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
     const flist    = flightsRef.current
     const existing = markersRef.current
 
-    let bounds = null
-    try { bounds = map.getBounds().pad(1.0) } catch { /* map not ready */ }
-
     const wanted = new Map()
     for (const f of flist) {
-      if (f.lat != null && f.lon != null) {
-        if (!bounds || bounds.contains([f.lat, f.lon]))
-          wanted.set(f.icao24, f)
-      }
+      if (f.lat != null && f.lon != null) wanted.set(f.icao24, f)
     }
 
     const toRemove = []
@@ -268,7 +266,6 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
       const e      = existing.get(id)
 
       if (e) {
-        // Snap to latest API position; DR timer takes over from here
         e.marker.setLatLng([f.lat, f.lon])
         e.flight = f
         if (newHb !== e.prevHb || String(f.squawk) !== e.prevSq || newAb !== e.prevAb || newCat !== e.prevCat) {
@@ -286,11 +283,14 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
     }
 
     if (toAdd.length) cg.addLayers(toAdd)
-  }, [map])
+  }, [])
 
-  // Imperative DR timer — moves markers via setLatLng every 500 ms, zero React re-renders
+  // Imperative DR timer — only runs when zoomed in enough for movement to be perceptible.
+  // At zoom < 7 (global/continental view) a 500 kt aircraft moves < 1 px in 500 ms,
+  // so skipping saves thousands of setLatLng calls per second.
   useEffect(() => {
     const id = setInterval(() => {
+      if (map.getZoom() < 7) return
       const nowSec = Date.now() / 1000
       for (const [, entry] of markersRef.current) {
         const f = entry.flight
@@ -306,10 +306,9 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
       }
     }, 500)
     return () => clearInterval(id)
-  }, [])
+  }, [map])
 
   useEffect(() => { sync() }, [flights, sync])
-  useMapEvents({ moveend: sync, zoomend: sync })
 
   return null
 })

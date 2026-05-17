@@ -298,6 +298,18 @@ def get_flight_history(icao24: str):
     return {"flights": [], "latest": None}
 
 
+def _clean_flight(fl: dict) -> dict:
+    """Normalise an OpenSky flight record: strip callsign whitespace, drop null partner airports."""
+    return {
+        "icao24":               fl.get("icao24", ""),
+        "callsign":             (fl.get("callsign") or "").strip() or None,
+        "firstSeen":            fl.get("firstSeen"),
+        "lastSeen":             fl.get("lastSeen"),
+        "estDepartureAirport":  fl.get("estDepartureAirport") or None,
+        "estArrivalAirport":    fl.get("estArrivalAirport")   or None,
+    }
+
+
 @router.get("/api/airport-flights/{ident}")
 def get_airport_flights(ident: str):
     """Departures + arrivals for an airport over the past 24 h."""
@@ -311,13 +323,20 @@ def get_airport_flights(ident: str):
                 f"https://opensky-network.org/api/flights/{kind}",
                 params={"airport": ident, "begin": begin, "end": end},
                 timeout=15, headers=opensky.headers())
-            return r.json() if r.ok else []
+            if not r.ok:
+                return []
+            raw = r.json() or []
+            return [_clean_flight(f) for f in raw if isinstance(f, dict)]
         except Exception:
             return []
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         deps = ex.submit(_fetch, "departure").result() or []
         arrs = ex.submit(_fetch, "arrival").result()   or []
+
+    # Filter out records that clearly belong to the wrong airport (OpenSky estimate mismatch)
+    deps = [f for f in deps if not f["estDepartureAirport"] or f["estDepartureAirport"] == ident]
+    arrs = [f for f in arrs if not f["estArrivalAirport"]   or f["estArrivalAirport"]   == ident]
 
     return {
         "departures": sorted(deps, key=lambda x: x.get("firstSeen", 0), reverse=True)[:60],

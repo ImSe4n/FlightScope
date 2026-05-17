@@ -21,7 +21,6 @@ def _get_client():
     global _client
     if _client is None and _HF_AVAILABLE:
         _client = AsyncInferenceClient(
-            provider="hf-inference",
             token=os.getenv("HF_TOKEN"),
         )
     return _client
@@ -90,7 +89,7 @@ async def ai_chat(body: ChatRequest):
     try:
         client = _get_client()
         response = await client.chat_completion(
-            model="mistralai/Mistral-7B-Instruct-v0.2",
+            model="Qwen/Qwen2.5-72B-Instruct",
             messages=messages,
             max_tokens=180,
             temperature=0.5,

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "WebSearch",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -c \"from api.airports import _airports_get; df = _airports_get\\(\\); print\\(f'Airports loaded: {len\\(df\\) if df is not None else 0}'\\)\")"
     ]
   }
 }

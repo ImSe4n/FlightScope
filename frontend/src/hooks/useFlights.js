@@ -80,10 +80,29 @@ export function useAirports() {
   const [airports, setAirports] = useState([])
 
   useEffect(() => {
-    fetch('/api/airports')
-      .then(r => r.json())
-      .then(d => setAirports(d.airports ?? []))
-      .catch(() => {})
+    let cancelled = false
+    let delay = 2000
+
+    const attempt = () => {
+      fetch('/api/airports')
+        .then(r => r.json())
+        .then(d => {
+          if (cancelled) return
+          if (d.airports?.length > 0) {
+            setAirports(d.airports)
+          } else {
+            // Empty response — backend CSV may still be loading; retry
+            setTimeout(attempt, delay)
+            delay = Math.min(delay * 2, 30_000)
+          }
+        })
+        .catch(() => {
+          if (!cancelled) { setTimeout(attempt, delay); delay = Math.min(delay * 2, 30_000) }
+        })
+    }
+
+    attempt()
+    return () => { cancelled = true }
   }, [])
 
   return airports

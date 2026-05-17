@@ -211,12 +211,34 @@ function AirportFlightsTab({ ident, liveFlights, onFlightSelect }) {
             const cs      = fl.callsign?.trim() || fl.icao24 || '—'
             const partner = sub === 'dep' ? fl.estArrivalAirport : fl.estDepartureAirport
             const ts      = sub === 'dep' ? tsHHMM(fl.firstSeen) : tsHHMM(fl.lastSeen)
-            const liveF   = liveMap.get(fl.icao24)
-            const lastSeen = fl.lastSeen ?? fl.firstSeen ?? 0
-            const status  = liveF
-              ? (liveF.onGround ? 'ground' : 'live')
-              : ((nowSec - lastSeen) < 7_200 ? 'recent' : null)
-            const clickable = !!liveF
+            const liveF        = liveMap.get(fl.icao24)
+            const firstSeenAge = nowSec - (fl.firstSeen ?? 0)
+            const lastSeenAge  = nowSec - (fl.lastSeen  ?? 0)
+
+            // Guard against stale ICAO24 matches: the same aircraft can do several flights in 24 h.
+            // Departure is only "live" if it departed < 20 h ago AND the aircraft is still airborne.
+            // Arrival  is only "live" if last seen < 2 h ago (landed recently or still inbound).
+            let status, clickable
+            if (liveF) {
+              if (sub === 'dep') {
+                if (firstSeenAge < 72_000) {          // < 20 h — plausibly the same flight leg
+                  status    = liveF.onGround ? 'ground' : 'live'
+                  clickable = !liveF.onGround
+                } else {
+                  status = null; clickable = false     // too old — aircraft is on a different flight
+                }
+              } else {
+                if (lastSeenAge < 7_200) {            // < 2 h — still inbound or just arrived
+                  status    = liveF.onGround ? 'ground' : 'live'
+                  clickable = !liveF.onGround
+                } else {
+                  status = null; clickable = false
+                }
+              }
+            } else {
+              status    = (sub === 'dep' ? firstSeenAge : lastSeenAge) < 7_200 ? 'recent' : null
+              clickable = false
+            }
 
             return (
               <div
