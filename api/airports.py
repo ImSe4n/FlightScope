@@ -20,7 +20,7 @@ from api.opensky import get_flight_cache
 router = APIRouter()
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-AIRPORT_API_TOKEN = '89e420818cba11453f8c0d69dd06e6a075288321eb34723d17fadf678cde51f575dd81b6245e01cf77f26831dd973895'
+AIRPORT_API_TOKEN = os.getenv("AIRPORTDB_TOKEN", "")
 
 TIER1_IATA = {
     # North America
