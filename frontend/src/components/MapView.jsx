@@ -266,7 +266,11 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
       const e      = existing.get(id)
 
       if (e) {
-        e.marker.setLatLng([f.lat, f.lon])
+        // Skip setLatLng when position unchanged — avoids triggering cluster recomputation
+        // for stationary aircraft (ground traffic, parked planes, etc.)
+        if (f.lat !== e.flight.lat || f.lon !== e.flight.lon) {
+          e.marker.setLatLng([f.lat, f.lon])
+        }
         e.flight = f
         if (newHb !== e.prevHb || String(f.squawk) !== e.prevSq || newAb !== e.prevAb || newCat !== e.prevCat) {
           e.marker.setIcon(isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt, newCat))
@@ -285,14 +289,18 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
     if (toAdd.length) cg.addLayers(toAdd)
   }, [])
 
-  // Imperative DR timer — only runs when zoomed in enough for movement to be perceptible.
-  // At zoom < 7 (global/continental view) a 500 kt aircraft moves < 1 px in 500 ms,
-  // so skipping saves thousands of setLatLng calls per second.
+  // Imperative DR timer — only updates markers that are individually visible on the map
+  // (not hidden inside a cluster bubble). At low zoom almost every marker is clustered,
+  // so getVisibleParent quickly skips them with zero DOM work.
+  // The zoom guard is a cheap early-out that avoids even the loop at global view.
   useEffect(() => {
     const id = setInterval(() => {
-      if (map.getZoom() < 7) return
+      const cg = clusterRef.current
+      if (!cg || map.getZoom() < 7) return
       const nowSec = Date.now() / 1000
       for (const [, entry] of markersRef.current) {
+        // Skip clustered markers — setLatLng on them triggers cluster recomputation for no visual gain
+        if (cg.getVisibleParent(entry.marker) !== entry.marker) continue
         const f = entry.flight
         if (f.onGround || !f.speed || f.heading == null || f.lat == null || !f.timePos) continue
         const dt = Math.min(Math.max(0, nowSec - f.timePos), 300)

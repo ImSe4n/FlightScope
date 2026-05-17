@@ -109,16 +109,25 @@ export function useAirports() {
 }
 
 export function useTrack(icao24) {
-  const [track, setTrack]           = useState(null)
-  const [trackLoading, setLoading]  = useState(false)
+  const [track, setTrack]          = useState(null)
+  const [trackLoading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!icao24) { setTrack(null); return }
-    setLoading(true)
-    fetch(`/api/track/${icao24}`)
-      .then(r => r.json())
-      .then(data => { setTrack(data.path ?? null); setLoading(false) })
-      .catch(() => { setTrack(null); setLoading(false) })
+
+    let cancelled = false
+    const doFetch = (showLoading = false) => {
+      if (showLoading) setLoading(true)
+      fetch(`/api/track/${icao24}`)
+        .then(r => r.json())
+        .then(data => { if (!cancelled) { setTrack(data.path ?? null); setLoading(false) } })
+        .catch(() => { if (!cancelled) setLoading(false) })
+    }
+
+    doFetch(true)
+    // Re-fetch every 60 s so the coloured path keeps growing as the aircraft flies
+    const id = setInterval(() => doFetch(false), 60_000)
+    return () => { cancelled = true; clearInterval(id) }
   }, [icao24])
 
   return { track, trackLoading }
