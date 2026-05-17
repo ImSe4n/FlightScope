@@ -44,15 +44,19 @@ function MapClickHandler({ onDeselect }) {
 }
 
 // ── Flight path — one segment per point pair, coloured by altitude ────────────
-function TrackLayer({ track, selectedPos }) {
-  const map     = useMap()
-  const segsRef = useRef([])
-  const extRef  = useRef(null)
+function TrackLayer({ track, selected }) {
+  const map      = useMap()
+  const segsRef  = useRef([])
+  const extRef   = useRef(null)
+  const selRef   = useRef(selected)
+  const trackRef = useRef(track)
+  selRef.current   = selected
+  trackRef.current = track
 
+  // Render coloured historical segments whenever track data changes
   useEffect(() => {
     segsRef.current.forEach(s => map.removeLayer(s))
     segsRef.current = []
-    if (extRef.current) { map.removeLayer(extRef.current); extRef.current = null }
 
     if (!track || track.length < 2) return
     const valid = track.filter(p => p[1] != null && p[2] != null)
@@ -72,27 +76,46 @@ function TrackLayer({ track, selectedPos }) {
     return () => { segsRef.current.forEach(s => map.removeLayer(s)); segsRef.current = [] }
   }, [track, map])
 
+  // Imperatively update the dashed extension every 500 ms — computes DR fresh from
+  // Date.now() so it stays in sync with the moving plane without relying on React renders
   useEffect(() => {
-    const valid = track?.filter(p => p[1] != null && p[2] != null)
-    const last  = valid?.at(-1)
+    const update = () => {
+      const f     = selRef.current
+      const trk   = trackRef.current
+      const valid = trk?.filter(p => p[1] != null && p[2] != null)
+      const last  = valid?.at(-1)
 
-    if (!last || !selectedPos?.lat || !selectedPos?.lon) {
+      if (!last || !f?.lat || !f?.lon) {
+        if (extRef.current) { map.removeLayer(extRef.current); extRef.current = null }
+        return
+      }
+
+      let lat = f.lat, lon = f.lon
+      if (!f.onGround && f.speed && f.heading != null && f.timePos != null) {
+        const dt     = Math.min(Math.max(0, Date.now() / 1000 - f.timePos), 300)
+        const s      = dt * f.speed
+        const hdR    = f.heading * (Math.PI / 180)
+        const cosLat = Math.cos(f.lat * (Math.PI / 180)) || 1e-9
+        lat = f.lat + (s * Math.cos(hdR) / 6_371_000) * (180 / Math.PI)
+        lon = f.lon + (s * Math.sin(hdR) / (6_371_000 * cosLat)) * (180 / Math.PI)
+      }
+
+      const latlngs = [[last[1], last[2]], [lat, lon]]
+      if (extRef.current) {
+        extRef.current.setLatLngs(latlngs)
+      } else {
+        extRef.current = L.polyline(latlngs, {
+          color: '#7c93af', weight: 2, opacity: 0.5, dashArray: '5 5',
+        }).addTo(map)
+      }
+    }
+
+    update()
+    const id = setInterval(update, 500)
+    return () => {
+      clearInterval(id)
       if (extRef.current) { map.removeLayer(extRef.current); extRef.current = null }
-      return
     }
-
-    const latlngs = [[last[1], last[2]], [selectedPos.lat, selectedPos.lon]]
-    if (extRef.current) {
-      extRef.current.setLatLngs(latlngs)
-    } else {
-      extRef.current = L.polyline(latlngs, {
-        color: '#7c93af', weight: 2, opacity: 0.5, dashArray: '5 5',
-      }).addTo(map)
-    }
-  }, [selectedPos, track, map])
-
-  useEffect(() => {
-    return () => { if (extRef.current) { map.removeLayer(extRef.current); extRef.current = null } }
   }, [map])
 
   return null
@@ -507,7 +530,7 @@ export default function MapView({ flights, airports, selected, selectedPos, live
         {overlays.atcBounds  && <ATCBoundsLayer />}
         {overlays.radar      && <RadarLayer />}
 
-        <TrackLayer track={track} selectedPos={selectedPos} />
+        <TrackLayer track={track} selected={selected} />
         <FlightLayer flights={layerFlights} onSelect={onSelect} />
         <SelectedMarker selectedPos={selectedPos} />
         <AirportLayer airports={airports} liveFlights={liveFlights} onFlightSelect={onFlightSelect} />
