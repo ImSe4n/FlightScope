@@ -12,7 +12,8 @@ export default function Sidebar({
   airports, track, onAirportSelect,
   followMode, onToggleFollow, showTrack, onToggleTrack, on3D,
 }) {
-  const [tab, setTab] = useState('flights')
+  const [tab, setTab] = useState(() => localStorage.getItem('fs_sidebarTab') || 'flights')
+  const switchTab = t => { setTab(t); localStorage.setItem('fs_sidebarTab', t) }
 
   return (
     <aside className="sidebar">
@@ -42,16 +43,21 @@ export default function Sidebar({
           <div className="sb-tabs">
             <button
               className={`sb-tab${tab === 'flights' ? ' sb-tab--active' : ''}`}
-              onClick={() => setTab('flights')}
+              onClick={() => switchTab('flights')}
             >
               ✈ Flights
             </button>
             <button
               className={`sb-tab${tab === 'filters' ? ' sb-tab--active' : ''}`}
-              onClick={() => setTab('filters')}
+              onClick={() => switchTab('filters')}
             >
               ⚙ Filters
-              {hasFilters && <span className="sb-tab-dot" />}
+              {hasFilters && (
+                <>
+                  <span className="sb-tab-dot" />
+                  <span className="sb-filter-badge">{flights.length.toLocaleString()}</span>
+                </>
+              )}
             </button>
           </div>
 

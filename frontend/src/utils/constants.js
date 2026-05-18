@@ -57,3 +57,6 @@ export const SOURCE_TYPES = {
   2: 'MLAT',
   3: 'FLARM',
 }
+
+// Extract 3-letter ICAO airline code from callsign (e.g. "BAW123" → "BAW")
+export const airlineOf = cs => cs?.trim().toUpperCase().match(/^([A-Z]{3})\d/)?.[1] ?? null

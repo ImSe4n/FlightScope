@@ -317,6 +317,18 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
   border-radius: 50%; background: var(--amber);
   margin-left: 5px; vertical-align: middle;
 }
+.sb-filter-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--amber);
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  vertical-align: middle;
+}
 
 .sb-heading {
   font-size: 10px; font-weight: 700;
@@ -820,6 +832,10 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 .popup-loading {
   font-size: 11px; color: var(--txt-3);
   padding: 6px 0; font-style: italic;
+}
+.popup-load-error {
+  font-size: 11px; color: var(--amber);
+  padding: 4px 0 6px; font-style: italic;
 }
 
 /* Description excerpt */

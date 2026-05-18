@@ -13,7 +13,8 @@ function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, on
     return () => clearTimeout(id)
   }, [local])
 
-  const q = local.trim().toLowerCase()
+  const q    = local.trim().toLowerCase().replace(/\s+/g, '')
+  const qRaw = local.trim().toLowerCase()
   const showDrop = open && q.length >= 2
 
   const matchAirports = useMemo(() => {
@@ -21,15 +22,15 @@ function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, on
     return airports.filter(a =>
       a.iata?.toLowerCase().startsWith(q) ||
       a.ident?.toLowerCase().startsWith(q) ||
-      a.name?.toLowerCase().includes(q) ||
-      a.city?.toLowerCase().includes(q)
+      a.name?.toLowerCase().includes(qRaw) ||
+      a.city?.toLowerCase().includes(qRaw)
     ).slice(0, 5)
-  }, [airports, q, showDrop])
+  }, [airports, q, qRaw, showDrop])
 
   const matchFlights = useMemo(() => {
     if (!showDrop) return []
     return flights.filter(f =>
-      f.callsign?.trim().toLowerCase().startsWith(q) ||
+      f.callsign?.trim().toLowerCase().replace(/\s+/g, '').startsWith(q) ||
       f.icao24?.toLowerCase().startsWith(q)
     ).slice(0, 5)
   }, [flights, q, showDrop])

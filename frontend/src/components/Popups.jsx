@@ -264,7 +264,7 @@ function AirportFlightsTab({ ident, liveFlights, onFlightSelect }) {
 }
 
 // ── Main airport popup ─────────────────────────────────────────────────────────
-export function AirportPopup({ a, loading = false, liveFlights, onFlightSelect }) {
+export function AirportPopup({ a, loading = false, loadError = false, liveFlights, onFlightSelect }) {
   const [tab, setTab] = useState('info')
 
   return (
@@ -300,6 +300,9 @@ export function AirportPopup({ a, loading = false, liveFlights, onFlightSelect }
           </button>
         </div>
 
+        {loadError && (
+          <div className="popup-load-error">⚠ Failed to load details — click to retry</div>
+        )}
         {tab === 'info'    && <AirportInfoTab a={a} loading={loading} />}
         {tab === 'flights' && (
           <AirportFlightsTab

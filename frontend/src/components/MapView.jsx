@@ -362,19 +362,21 @@ function AirportLayer({ airports, liveFlights, onFlightSelect }) {
 
 // ── Airport marker with lazy-loaded enrichment ────────────────────────────────
 const AirportMarker = memo(function AirportMarker({ a, liveFlights, onFlightSelect }) {
-  const [detail,  setDetail]  = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [detail,    setDetail]    = useState(null)
+  const [loading,   setLoading]   = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const triggered = useRef(false)
 
   const handleClick = useCallback(() => {
-    if (triggered.current) return
+    if (triggered.current && !loadError) return
     triggered.current = true
     setLoading(true)
+    setLoadError(false)
     fetch(`/api/airport/${a.ident}`)
       .then(r => r.json())
       .then(d => { setDetail(d); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [a.ident])
+      .catch(() => { setLoading(false); setLoadError(true); triggered.current = false })
+  }, [a.ident, loadError])
 
   const merged = detail ? { ...a, ...detail } : a
 
@@ -385,7 +387,7 @@ const AirportMarker = memo(function AirportMarker({ a, liveFlights, onFlightSele
       eventHandlers={{ click: handleClick }}
     >
       <Popup maxWidth={380}>
-        <AirportPopup a={merged} loading={loading} liveFlights={liveFlights} onFlightSelect={onFlightSelect} />
+        <AirportPopup a={merged} loading={loading} loadError={loadError} liveFlights={liveFlights} onFlightSelect={onFlightSelect} />
       </Popup>
     </Marker>
   )
@@ -402,12 +404,24 @@ function GeolocateBtn() {
   return <div className="map-ctrl-btn" title="Fly to my location" onClick={locate}>◎</div>
 }
 
+// ── Zoom-to-fit button — fits all currently visible flights in viewport ───────
+function ZoomToFitBtn({ flights }) {
+  const map = useMap()
+  const fit = useCallback(() => {
+    const pts = flights.filter(f => f.lat != null && f.lon != null)
+    if (!pts.length) return
+    map.fitBounds(L.latLngBounds(pts.map(f => [f.lat, f.lon])), { padding: [50, 50], maxZoom: 8 })
+  }, [flights, map])
+  return <div className="map-ctrl-btn" title="Zoom to fit all flights" onClick={fit}>⊡</div>
+}
+
 // ── Map controls overlay ──────────────────────────────────────────────────────
-function MapControls() {
+function MapControls({ flights }) {
   const map = useMap()
   return (
     <div className="map-controls">
       <GeolocateBtn />
+      <ZoomToFitBtn flights={flights} />
       <div className="map-ctrl-btn" title="Zoom in"  onClick={() => map.zoomIn()}>+</div>
       <div className="map-ctrl-btn" title="Zoom out" onClick={() => map.zoomOut()}>−</div>
     </div>
@@ -492,7 +506,17 @@ function OverlayPanel({ overlays, setOverlays, onClose }) {
 export default function MapView({ flights, airports, selected, selectedPos, liveFlights, flyTarget, mapLayer, onSelect, onFlightSelect, onDeselect, track, followMode }) {
   const layer = TILE_LAYERS[mapLayer] ?? TILE_LAYERS.dark
 
-  const [overlays, setOverlays] = useState({ terminator: false, atcBounds: false, radar: false })
+  const [overlays, setOverlays] = useState(() => {
+    try {
+      const s = localStorage.getItem('fs_overlays')
+      return s ? { terminator: false, atcBounds: false, radar: false, ...JSON.parse(s) }
+               : { terminator: false, atcBounds: false, radar: false }
+    } catch { return { terminator: false, atcBounds: false, radar: false } }
+  })
+
+  useEffect(() => {
+    localStorage.setItem('fs_overlays', JSON.stringify(overlays))
+  }, [overlays])
   const [layerPanelOpen, setLayerPanelOpen] = useState(false)
 
   // Exclude selected flight from cluster layer (SelectedMarker renders it separately)
@@ -512,7 +536,7 @@ export default function MapView({ flights, airports, selected, selectedPos, live
       >
         <FlyTo target={flyTarget} />
         <MapClickHandler onDeselect={onDeselect} />
-        <MapControls />
+        <MapControls flights={flights} />
         <FollowMode selectedPos={selectedPos} active={followMode} />
 
         <TileLayer

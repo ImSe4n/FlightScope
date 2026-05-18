@@ -140,6 +140,8 @@ async def ai_chat(body: ChatRequest):
 
     try:
         client = _get_client()
+        if client is None:
+            return {"answer": "AI client could not be initialised — check HF_TOKEN in .env.", "error": True}
         response = await client.chat_completion(
             model="Qwen/Qwen2.5-72B-Instruct",
             messages=messages,

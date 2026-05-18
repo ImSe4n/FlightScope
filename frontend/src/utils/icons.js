@@ -76,20 +76,24 @@ const _SIZE = {
   default:    { iconSize: [20, 20], iconAnchor: [10, 10]  },
 }
 
-// Cache keyed by heading-bucket × altitude-bucket × category = max 900 entries
-const _cache = {}
+// Cache keyed by heading-bucket × altitude-bucket × category.
+// Cleared when it exceeds 1200 entries to prevent unbounded memory growth.
+const _cache    = new Map()
+const _CACHE_MAX = 1200
 
 export function makePlaneIcon(heading, alt, category = 'default') {
   const hb  = Math.round((heading ?? 0) / 10) * 10
   const ab  = altBucket(alt)
   const cat = _SVG[category] ? category : 'default'
   const key = `${hb}_${ab}_${cat}`
-  if (!_cache[key]) {
+  if (!_cache.has(key)) {
+    if (_cache.size >= _CACHE_MAX) _cache.clear()
     const col = altColor(alt)
     const deg = hb - 90
 
+    let icon
     if (cat === 'default') {
-      _cache[key] = L.divIcon({
+      icon = L.divIcon({
         html:        `<span class="plane-icon" style="--r:${deg}deg;color:${col}">✈</span>`,
         className:   '',
         iconSize:    [20, 20],
@@ -97,12 +101,9 @@ export function makePlaneIcon(heading, alt, category = 'default') {
         popupAnchor: [0, -12],
       })
     } else {
-      // Use a square container so rotation is always centred on the marker point.
-      // The SVG sits inside a flex-centred square div; inline display:flex overrides
-      // the block set by .plane-icon in CSS.
       const [w, h] = _SIZE[cat].iconSize
-      const box    = Math.max(w, h) + 4   // a few px padding so tip never clips
-      _cache[key]  = L.divIcon({
+      const box    = Math.max(w, h) + 4
+      icon = L.divIcon({
         html: `<span class="plane-icon plane-icon--svg" style="display:flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;--r:${deg}deg;color:${col}">${_SVG[cat]}</span>`,
         className:   '',
         iconSize:    [box, box],
@@ -110,8 +111,9 @@ export function makePlaneIcon(heading, alt, category = 'default') {
         popupAnchor: [0, -(box / 2 + 4)],
       })
     }
+    _cache.set(key, icon)
   }
-  return _cache[key]
+  return _cache.get(key)
 }
 
 export function makeEmergencyIcon(heading, squawk) {

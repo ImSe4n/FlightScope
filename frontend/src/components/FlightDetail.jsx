@@ -250,15 +250,11 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
         <button
           className="fd-action"
           onClick={() => {
-            const parts = [
-              callsign,
-              f.icao24?.toUpperCase(),
-              fromIcao && toIcao ? `${fromIcao}→${toIcao}` : '',
-              f.lat != null ? `${f.lat.toFixed(4)},${f.lon.toFixed(4)}` : '',
-            ].filter(Boolean)
-            navigator.clipboard?.writeText(parts.join(' | '))
+            const url = new URL(window.location.href)
+            url.searchParams.set('icao24', f.icao24)
+            navigator.clipboard?.writeText(url.toString())
           }}
-          title="Copy flight info to clipboard"
+          title="Copy shareable link to clipboard"
         >
           <span className="fd-action-icon">↗</span>
           Share

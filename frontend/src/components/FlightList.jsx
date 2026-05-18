@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react'
-import { EMERGENCY_SQUAWKS } from '../utils/constants'
+import { EMERGENCY_SQUAWKS, airlineOf } from '../utils/constants'
 
 const LIST_LIMIT = 300
 const ft = v => v != null ? Math.round(v * 3.28084) : null
-const airlineOf = cs => cs?.trim().toUpperCase().match(/^([A-Z]{3})\d/)?.[1] ?? ''
 
 // Vertical-rate arrow: ↑ climbing, ↓ descending, blank if level / unknown
 function vrArrow(vr) {

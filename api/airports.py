@@ -100,7 +100,17 @@ def _wiki_fetch(name):
         return {}
 
 
+_weather_cache: dict = {}   # (lat_bucket, lon_bucket) → (result, timestamp)
+WEATHER_CACHE_TTL = 600     # 10 minutes — fine-grained enough for airport popups
+
+
 def _weather_fetch(lat, lon):
+    key = (round(lat, 1), round(lon, 1))
+    now_ts = time.time()
+    if key in _weather_cache:
+        cached, ts = _weather_cache[key]
+        if now_ts - ts < WEATHER_CACHE_TTL:
+            return cached
     try:
         r = requests.get("https://api.open-meteo.com/v1/forecast", params={
             "latitude":        lat,
@@ -138,13 +148,15 @@ def _weather_fetch(lat, lon):
                     "wxcode":    wxcodes[i] if i < len(wxcodes) else None,
                 })
 
-        return {
+        result = {
             "temperature":   cw.get("temperature"),
             "windspeed":     cw.get("windspeed"),
             "winddirection": cw.get("winddirection"),
             "weathercode":   cw.get("weathercode"),
             "hourly":        hourly,
         }
+        _weather_cache[key] = (result, now_ts)
+        return result
     except Exception:
         return None
 

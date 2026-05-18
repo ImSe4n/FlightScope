@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { airlineOf } from '../utils/constants'
 
 const SUGGESTIONS = [
   'Are there any emergency flights right now?',
@@ -24,7 +25,7 @@ function buildContext(flights, selected, aircraftInfo, route) {
   const airlineCounts = {}
   const countryCounts = {}
   for (const f of flights) {
-    const code = f.callsign?.trim().toUpperCase().match(/^([A-Z]{3})\d/)?.[1]
+    const code = airlineOf(f.callsign)
     if (code) airlineCounts[code] = (airlineCounts[code] || 0) + 1
     if (f.origin) countryCounts[f.origin] = (countryCounts[f.origin] || 0) + 1
   }

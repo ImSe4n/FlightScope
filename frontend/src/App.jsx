@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useTransition, useCallback, memo, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, useMemo, useTransition, useCallback, memo, lazy, Suspense } from 'react'
 import { useFlights, useAirports, useTrack, useDrFlight } from './hooks/useFlights'
+import { airlineOf } from './utils/constants'
 import Header   from './components/Header'
 import Sidebar  from './components/Sidebar'
 import MapView  from './components/MapView'
@@ -21,9 +22,6 @@ const DEFAULT_FILTERS = {
   maxSpeed:      '',
 }
 
-// Extract 3-letter ICAO airline code from callsign (e.g. "BAW123" → "BAW")
-const airlineOf = cs => cs?.trim().toUpperCase().match(/^([A-Z]{3})\d/)?.[1] ?? null
-
 const MemoSidebar = memo(Sidebar, (prev, next) =>
   prev.selected         === next.selected         &&
   prev.filters          === next.filters          &&
@@ -44,13 +42,43 @@ export default function App() {
   const { flights, error } = useFlights()
   const airports   = useAirports()
 
-  const [filters,    setFilters]    = useState(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState(() => {
+    try {
+      const s = localStorage.getItem('fs_filters')
+      // Never restore text query — it's ephemeral
+      return s ? { ...DEFAULT_FILTERS, ...JSON.parse(s), query: '' } : DEFAULT_FILTERS
+    } catch { return DEFAULT_FILTERS }
+  })
   const [selected,   setSelected]   = useState(null)
   const [flyTarget,  setFlyTarget]  = useState(null)
-  const [mapLayer,   setMapLayer]   = useState('dark')
+  const [mapLayer,   setMapLayer]   = useState(() => localStorage.getItem('fs_mapLayer') || 'dark')
   const [followMode, setFollowMode] = useState(false)
   const [showTrack,  setShowTrack]  = useState(true)
   const [globe3D,    setGlobe3D]    = useState(null)  // { flight, fromIcao, toIcao }
+
+  // Persist filters (minus query) whenever they change
+  useEffect(() => {
+    const { query, ...rest } = filters
+    localStorage.setItem('fs_filters', JSON.stringify(rest))
+  }, [filters])
+
+  // Restore selected flight from ?icao24= URL param on first data load
+  const initialIcaoRef = useRef(new URLSearchParams(window.location.search).get('icao24'))
+  useEffect(() => {
+    const icao = initialIcaoRef.current
+    if (!icao || !flights.length || selected) return
+    const f = flights.find(f => f.icao24 === icao)
+    if (f) { setSelected(f); setFlyTarget(f) }
+    initialIcaoRef.current = null
+  }, [flights])
+
+  // Keep URL in sync with selected flight so links are shareable
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (selected?.icao24) url.searchParams.set('icao24', selected.icao24)
+    else url.searchParams.delete('icao24')
+    window.history.replaceState(null, '', url.toString())
+  }, [selected])
 
   const [, startTransition] = useTransition()
 
@@ -96,9 +124,9 @@ export default function App() {
     if (filters.minSpeed !== '') r = r.filter(f => f.speed != null && f.speed >= Number(filters.minSpeed))
     if (filters.maxSpeed !== '') r = r.filter(f => f.speed != null && f.speed <= Number(filters.maxSpeed))
     if (filters.query.trim()) {
-      const q = filters.query.trim().toLowerCase()
+      const q = filters.query.trim().toLowerCase().replace(/\s+/g, '')
       r = r.filter(f =>
-        f.callsign?.trim().toLowerCase().includes(q) ||
+        f.callsign?.trim().toLowerCase().replace(/\s+/g, '').includes(q) ||
         f.icao24?.toLowerCase().includes(q) ||
         f.origin?.toLowerCase().includes(q) ||
         String(f.squawk).includes(q)
@@ -128,6 +156,11 @@ export default function App() {
   const handleDeselect = useCallback(() => {
     setSelected(null)
     setFollowMode(false)
+  }, [])
+
+  const handleLayerChange  = useCallback(layer => {
+    setMapLayer(layer)
+    localStorage.setItem('fs_mapLayer', layer)
   }, [])
 
   const handleToggleFollow = useCallback(() => setFollowMode(v => !v), [])
@@ -160,7 +193,7 @@ export default function App() {
         stats={stats}
         error={error}
         mapLayer={mapLayer}
-        onLayerChange={setMapLayer}
+        onLayerChange={handleLayerChange}
         flights={flights}
         airports={airports}
         onFlightSelect={handleSelect}

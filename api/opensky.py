@@ -282,17 +282,29 @@ def get_route(callsign: str):
     return {}
 
 
+_history_cache: dict = {}   # icao24 → (result, timestamp)
+HISTORY_CACHE_TTL = 300     # 5 minutes — OpenSky updates flight records slowly
+
+
 @router.get("/api/flight-history/{icao24}")
 def get_flight_history(icao24: str):
-    end = int(time.time())
+    icao = icao24.lower()
+    now  = time.time()
+    if icao in _history_cache:
+        cached, ts = _history_cache[icao]
+        if now - ts < HISTORY_CACHE_TTL:
+            return cached
+    end = int(now)
     try:
         r = requests.get(
             "https://opensky-network.org/api/flights/aircraft",
-            params={"icao24": icao24.lower(), "begin": end - 86_400, "end": end},
+            params={"icao24": icao, "begin": end - 86_400, "end": end},
             timeout=10, headers=opensky.headers())
         if r.ok:
-            data = r.json() or []
-            return {"flights": data, "latest": data[-1] if data else None}
+            data   = r.json() or []
+            result = {"flights": data, "latest": data[-1] if data else None}
+            _history_cache[icao] = (result, now)
+            return result
     except Exception:
         pass
     return {"flights": [], "latest": None}
