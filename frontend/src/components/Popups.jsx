@@ -208,8 +208,11 @@ function AirportFlightsTab({ ident, liveFlights, onFlightSelect }) {
       {list.length > 0 && (
         <div className="apf-list">
           {list.map((fl, i) => {
-            const cs      = fl.callsign?.trim() || fl.icao24 || '—'
-            const partner = sub === 'dep' ? fl.estArrivalAirport : fl.estDepartureAirport
+            const cs = fl.callsign?.trim() || fl.icao24 || '—'
+            // Prefer schedule-DB route (routeArr/routeDep) over OpenSky trajectory estimates
+            const partner = sub === 'dep'
+              ? (fl.routeArr ?? fl.estArrivalAirport)
+              : (fl.routeDep ?? fl.estDepartureAirport)
             const ts      = sub === 'dep' ? tsHHMM(fl.firstSeen) : tsHHMM(fl.lastSeen)
             const liveF        = liveMap.get(fl.icao24)
             const firstSeenAge = nowSec - (fl.firstSeen ?? 0)

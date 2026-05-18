@@ -118,10 +118,12 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
     catch { return s }
   }
 
-  // Merge route (scheduled) with history (actual) — prefer scheduled
+  // Route: prefer schedule DB (adsbdb/OpenSky routes) → AeroDataBox → nothing.
+  // Do NOT fall back to history.estDepartureAirport/estArrivalAirport — OpenSky's
+  // trajectory-based estimates are unreliable and often wrong.
   const latest   = history?.latest
-  const fromIcao = route?.route?.[0]                    ?? latest?.estDepartureAirport
-  const toIcao   = route?.route?.[route.route.length-1] ?? latest?.estArrivalAirport
+  const fromIcao = route?.route?.[0]                     ?? flightStatus?.departure?.airport ?? null
+  const toIcao   = route?.route?.[route.route.length - 1] ?? flightStatus?.arrival?.airport  ?? null
 
   // Prefer AeroDataBox times when available (more precise), fall back to OpenSky history
   const depTime  = flightStatus?.departure?.actual   ?? flightStatus?.departure?.scheduled   ?? (latest?.firstSeen ? hhmm(latest.firstSeen) : null)
