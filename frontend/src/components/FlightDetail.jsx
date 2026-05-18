@@ -398,6 +398,9 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
         <DetailRow label="Last Seen"   value={hhmm(f.lastContact)} />
       </div>
 
+      {/* ── Past flights ─────────────────────────────────────────────────── */}
+      <PastFlights history={history} currentIcao24={f.icao24} />
+
       {/* ── Copy / action buttons ────────────────────────────────────────── */}
       <div className="fd-copy-row">
         <button className="btn-copy" onClick={() => copy(f.icao24)}>Copy ICAO</button>
@@ -409,6 +412,53 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
         )}
       </div>
 
+    </div>
+  )
+}
+
+function PastFlights({ history }) {
+  if (!history?.flights?.length) return null
+
+  // Most recent first; skip records with neither airport known
+  const flights = [...history.flights]
+    .reverse()
+    .filter(fl => fl.estDepartureAirport || fl.estArrivalAirport)
+
+  if (!flights.length) return null
+
+  return (
+    <div className="fd-card">
+      <div className="fd-card-label">Flight History (24 h)</div>
+      <div className="fd-hist-list">
+        {flights.map((fl, i) => {
+          const dep = fl.estDepartureAirport ?? '?'
+          const arr = fl.estArrivalAirport   ?? '?'
+          const inFlight = !fl.lastSeen || fl.lastSeen <= (fl.firstSeen ?? 0)
+          const duration = !inFlight && fl.firstSeen && fl.lastSeen
+            ? fmtDur((fl.lastSeen - fl.firstSeen) * 1000)
+            : null
+          const depTime = fl.firstSeen
+            ? new Date(fl.firstSeen * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : null
+
+          return (
+            <div key={i} className="fd-hist-row">
+              <span className="fd-hist-time">{depTime ?? '—'}</span>
+              <span className="fd-hist-route">
+                <span className="fd-hist-ap">{dep}</span>
+                <span className="fd-hist-arrow">→</span>
+                <span className="fd-hist-ap">{arr}</span>
+              </span>
+              <span className="fd-hist-right">
+                {inFlight
+                  ? <span className="fd-hist-live">IN FLIGHT</span>
+                  : <span className="fd-hist-dur">{duration}</span>
+                }
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

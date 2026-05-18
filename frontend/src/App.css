@@ -567,6 +567,30 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 .fd-val  { color: var(--txt); font-size: 12px; text-align: right; word-break: break-all; }
 .fd-mono { font-family: var(--mono); font-size: 11px; }
 
+/* ── Past flights history ────────────────────────────────────────────────── */
+.fd-hist-list { display: flex; flex-direction: column; gap: 4px; }
+.fd-hist-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.fd-hist-row:last-child { border-bottom: none; }
+.fd-hist-time { color: var(--txt-3); font-family: var(--mono); min-width: 38px; flex-shrink: 0; }
+.fd-hist-route {
+  display: flex; align-items: center; gap: 5px;
+  flex: 1; overflow: hidden;
+}
+.fd-hist-ap  { font-family: var(--mono); font-weight: 700; color: var(--txt); font-size: 11px; }
+.fd-hist-arrow { color: var(--txt-3); font-size: 10px; }
+.fd-hist-right { margin-left: auto; flex-shrink: 0; }
+.fd-hist-dur  { color: var(--txt-3); font-size: 10px; font-family: var(--mono); }
+.fd-hist-live {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--green); background: color-mix(in srgb, var(--green) 15%, transparent);
+  padding: 1px 5px; border-radius: 3px;
+}
+
 .fd-copy-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .btn-copy {
   background: var(--surface);
