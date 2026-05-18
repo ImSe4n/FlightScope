@@ -209,10 +209,11 @@ function AirportFlightsTab({ ident, liveFlights, onFlightSelect }) {
         <div className="apf-list">
           {list.map((fl, i) => {
             const cs = fl.callsign?.trim() || fl.icao24 || '—'
-            // Prefer schedule-DB route (routeArr/routeDep) over OpenSky trajectory estimates
+            // OpenSky's trajectory estimate is specific to this actual flight;
+            // adsbdb scheduled route is only a fallback for when OpenSky has nothing.
             const partner = sub === 'dep'
-              ? (fl.routeArr ?? fl.estArrivalAirport)
-              : (fl.routeDep ?? fl.estDepartureAirport)
+              ? (fl.estArrivalAirport ?? fl.routeArr)
+              : (fl.estDepartureAirport ?? fl.routeDep)
             const ts      = sub === 'dep' ? tsHHMM(fl.firstSeen) : tsHHMM(fl.lastSeen)
             const liveF        = liveMap.get(fl.icao24)
             const firstSeenAge = nowSec - (fl.firstSeen ?? 0)

@@ -395,11 +395,12 @@ def get_airport_flights(ident: str):
     deps = sorted(deps_raw, key=lambda x: x.get("firstSeen", 0), reverse=True)[:60]
     arrs = sorted(arrs_raw, key=lambda x: x.get("lastSeen",  0), reverse=True)[:60]
 
-    # Enrich partner airports via schedule DB (adsbdb) — much more reliable than
-    # OpenSky's trajectory-estimated estArrivalAirport / estDepartureAirport fields.
-    # Limit to the 20 most-recent deps + 20 most-recent arrs to keep first-load fast;
-    # the rest fall back to OpenSky estimates shown in the UI.
-    top_flights = deps[:20] + arrs[:20]
+    # Only call adsbdb for flights where OpenSky has no trajectory estimate.
+    # OpenSky's est*Airport is specific to the actual flight; adsbdb is a scheduled-route
+    # lookup that can map a callsign to a completely different city pair on different days.
+    deps_no_arr = [f for f in deps if not f["estArrivalAirport"]]
+    arrs_no_dep = [f for f in arrs if not f["estDepartureAirport"]]
+    top_flights = deps_no_arr[:20] + arrs_no_dep[:20]
     unique_cs   = list({f["callsign"] for f in top_flights if f["callsign"]})
     if unique_cs:
         with ThreadPoolExecutor(max_workers=min(len(unique_cs), 20)) as ex:
