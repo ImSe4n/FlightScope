@@ -101,11 +101,13 @@ function TrackLayer({ track, selected }) {
       }
 
       const latlngs = [[last[1], last[2]], [lat, lon]]
+      const extColor = altColor(last[3])
       if (extRef.current) {
         extRef.current.setLatLngs(latlngs)
+        extRef.current.setStyle({ color: extColor })
       } else {
         extRef.current = L.polyline(latlngs, {
-          color: '#7c93af', weight: 2, opacity: 0.5, dashArray: '5 5',
+          color: extColor, weight: 3, opacity: 0.7, dashArray: '7 5',
         }).addTo(map)
       }
     }
