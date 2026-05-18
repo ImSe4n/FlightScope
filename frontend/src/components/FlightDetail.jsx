@@ -118,12 +118,46 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
     catch { return s }
   }
 
-  // Route: prefer schedule DB (adsbdb/OpenSky routes) → AeroDataBox → nothing.
-  // Do NOT fall back to history.estDepartureAirport/estArrivalAirport — OpenSky's
-  // trajectory-based estimates are unreliable and often wrong.
+  // Detect departure airport from the track's first low-altitude point.
+  // This is the actual physical airport, not a callsign-schedule guess — far more reliable
+  // because the same callsign can operate different routes on different days.
+  const trackDep = useMemo(() => {
+    if (!track?.length || !airports?.length) return null
+    // Prefer first point at or near ground (<300 m); fall back to absolute first point
+    const pt = track.find(p => p[3] != null && p[3] < 300) ?? track[0]
+    if (pt[1] == null || pt[2] == null) return null
+    const [, lat0, lon0] = pt
+    const R = 6371
+    let nearest = null, minKm = 50  // reject if no airport within 50 km
+    for (const a of airports) {
+      if (a.lat == null || a.lon == null) continue
+      const dLat = (a.lat - lat0) * Math.PI / 180
+      const dLon = (a.lon - lon0) * Math.PI / 180
+      const km   = R * 2 * Math.asin(Math.sqrt(
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat0 * Math.PI / 180) * Math.cos(a.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+      ))
+      if (km < minKm) { minKm = km; nearest = a }
+    }
+    return nearest?.ident ?? null
+  }, [track, airports])
+
+  // Sanity-check the callsign route DB: if its stated departure disagrees with what we
+  // observed in the track, that DB entry is for a different route — discard its destination too.
+  const routeDepCode    = route?.route?.[0]
+  const trackDepAirport = trackDep ? airports.find(a => a.ident === trackDep) : null
+  const routeMatchesDep = !trackDep || !routeDepCode ||
+    routeDepCode === trackDep ||
+    (trackDepAirport?.iata && routeDepCode === trackDepAirport.iata)
+
   const latest   = history?.latest
-  const fromIcao = route?.route?.[0]                     ?? flightStatus?.departure?.airport ?? null
-  const toIcao   = route?.route?.[route.route.length - 1] ?? flightStatus?.arrival?.airport  ?? null
+  const fromIcao = flightStatus?.departure?.airport
+    ?? trackDep
+    ?? (routeMatchesDep ? routeDepCode : null)
+    ?? null
+  const toIcao   = flightStatus?.arrival?.airport
+    ?? (routeMatchesDep ? route?.route?.[route.route.length - 1] : null)
+    ?? null
 
   // Prefer AeroDataBox times when available (more precise), fall back to OpenSky history
   const depTime  = flightStatus?.departure?.actual   ?? flightStatus?.departure?.scheduled   ?? (latest?.firstSeen ? hhmm(latest.firstSeen) : null)
