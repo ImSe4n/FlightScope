@@ -323,23 +323,26 @@ def _clean_flight(fl: dict) -> dict:
 
 
 # Route cache for airport-flights enrichment — routes are stable, keep for 24 h
-_route_cache: dict = {}   # callsign → (dep_icao, arr_icao, timestamp)
-_ROUTE_CACHE_TTL = 86_400
+# Miss entries expire sooner (1 h) so transient adsbdb failures don't block permanently.
+_route_cache: dict = {}        # callsign → (dep_icao | None, arr_icao | None, timestamp)
+_ROUTE_TTL_HIT  = 86_400       # 24 h for successful lookups
+_ROUTE_TTL_MISS = 3_600        # 1 h for failed lookups
 
 
 def _lookup_route(cs: str) -> tuple[str, str] | None:
-    """Return (dep_icao, arr_icao) from adsbdb for a callsign, or None."""
+    """Return (dep_icao, arr_icao) from adsbdb for a callsign, or None on miss."""
     if not cs:
         return None
     now = time.time()
     if cs in _route_cache:
         dep, arr, ts = _route_cache[cs]
-        if now - ts < _ROUTE_CACHE_TTL:
+        ttl = _ROUTE_TTL_HIT if (dep and arr) else _ROUTE_TTL_MISS
+        if now - ts < ttl:
             return (dep, arr) if dep and arr else None
     try:
         r = requests.get(
             f"https://api.adsbdb.com/v0/callsign/{cs}",
-            timeout=4, headers={"User-Agent": "FlightScope/1.0"})
+            timeout=3, headers={"User-Agent": "FlightScope/1.0"})
         if r.ok:
             fr  = r.json().get("response", {}).get("flightroute") or {}
             dep = (fr.get("origin")      or {}).get("icao_code")
@@ -352,11 +355,24 @@ def _lookup_route(cs: str) -> tuple[str, str] | None:
     return None
 
 
+# Cache the full airport-flights response for 10 minutes so the parallel
+# route enrichment only runs once per airport per session.
+_apf_cache: dict = {}     # ident → (result, timestamp)
+_APF_CACHE_TTL = 600
+
+
 @router.get("/api/airport-flights/{ident}")
 def get_airport_flights(ident: str):
     """Departures + arrivals for an airport over the past 24 h."""
     ident = ident.upper()
-    end   = int(time.time())
+    now   = time.time()
+
+    if ident in _apf_cache:
+        cached, ts = _apf_cache[ident]
+        if now - ts < _APF_CACHE_TTL:
+            return cached
+
+    end   = int(now)
     begin = end - 86_400
 
     def _fetch(kind):
@@ -379,24 +395,24 @@ def get_airport_flights(ident: str):
     deps = sorted(deps_raw, key=lambda x: x.get("firstSeen", 0), reverse=True)[:60]
     arrs = sorted(arrs_raw, key=lambda x: x.get("lastSeen",  0), reverse=True)[:60]
 
-    # Enrich partner airports with schedule-DB data — far more reliable than OpenSky estimates.
-    # Look up unique callsigns in parallel; cached after first hit so repeat clicks are instant.
-    unique_cs = list({f["callsign"] for f in (deps + arrs) if f["callsign"]})
-    with ThreadPoolExecutor(max_workers=min(len(unique_cs), 20)) as ex:
-        route_pairs = list(ex.map(_lookup_route, unique_cs))
-    route_map = {cs: rt for cs, rt in zip(unique_cs, route_pairs) if rt}
+    # Enrich partner airports via schedule DB (adsbdb) — much more reliable than
+    # OpenSky's trajectory-estimated estArrivalAirport / estDepartureAirport fields.
+    # Limit to the 20 most-recent deps + 20 most-recent arrs to keep first-load fast;
+    # the rest fall back to OpenSky estimates shown in the UI.
+    top_flights = deps[:20] + arrs[:20]
+    unique_cs   = list({f["callsign"] for f in top_flights if f["callsign"]})
+    if unique_cs:
+        with ThreadPoolExecutor(max_workers=min(len(unique_cs), 20)) as ex:
+            route_pairs = list(ex.map(_lookup_route, unique_cs))
+        route_map = {cs: rt for cs, rt in zip(unique_cs, route_pairs) if rt}
+        for f in deps + arrs:
+            rt = route_map.get(f["callsign"])
+            if rt:
+                f["routeDep"], f["routeArr"] = rt
 
-    for f in deps:
-        rt = route_map.get(f["callsign"])
-        if rt:
-            f["routeDep"], f["routeArr"] = rt
-
-    for f in arrs:
-        rt = route_map.get(f["callsign"])
-        if rt:
-            f["routeDep"], f["routeArr"] = rt
-
-    return {"departures": deps, "arrivals": arrs}
+    result = {"departures": deps, "arrivals": arrs}
+    _apf_cache[ident] = (result, now)
+    return result
 
 
 @router.get("/api/flight-status/{callsign}")
