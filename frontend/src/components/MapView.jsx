@@ -288,6 +288,7 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
       const newHb  = Math.round((f.heading ?? 0) / 10) * 10
       const newAb  = altBucket(f.alt)
       const newCat = getCachedType(id)
+      const newCs  = f.callsign || ''
       const e      = existing.get(id)
 
       if (e) {
@@ -297,14 +298,14 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
           e.marker.setLatLng([f.lat, f.lon])
         }
         e.flight = f
-        if (newHb !== e.prevHb || String(f.squawk) !== e.prevSq || newAb !== e.prevAb || newCat !== e.prevCat) {
-          e.marker.setIcon(isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt, newCat))
-          e.prevHb = newHb; e.prevSq = String(f.squawk); e.prevAb = newAb; e.prevCat = newCat
+        if (newHb !== e.prevHb || String(f.squawk) !== e.prevSq || newAb !== e.prevAb || newCat !== e.prevCat || newCs !== e.prevCs) {
+          e.marker.setIcon(isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt, newCat, newCs))
+          e.prevHb = newHb; e.prevSq = String(f.squawk); e.prevAb = newAb; e.prevCat = newCat; e.prevCs = newCs
         }
       } else {
-        const icon   = isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt, newCat)
+        const icon   = isEmg ? makeEmergencyIcon(f.heading, f.squawk) : makePlaneIcon(f.heading, f.alt, newCat, newCs)
         const marker = L.marker([f.lat, f.lon], { icon })
-        const entry  = { marker, flight: f, prevHb: newHb, prevSq: String(f.squawk), prevAb: newAb, prevCat: newCat }
+        const entry  = { marker, flight: f, prevHb: newHb, prevSq: String(f.squawk), prevAb: newAb, prevCat: newCat, prevCs: newCs }
         marker.on('click', ev => { L.DomEvent.stopPropagation(ev); onSelRef.current(entry.flight) })
         existing.set(id, entry)
         toAdd.push(marker)

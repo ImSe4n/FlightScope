@@ -81,20 +81,22 @@ const _SIZE = {
 const _cache    = new Map()
 const _CACHE_MAX = 1200
 
-export function makePlaneIcon(heading, alt, category = 'default') {
+export function makePlaneIcon(heading, alt, category = 'default', callsign = '') {
   const hb  = Math.round((heading ?? 0) / 10) * 10
   const ab  = altBucket(alt)
   const cat = _SVG[category] ? category : 'default'
-  const key = `${hb}_${ab}_${cat}`
+  const cs  = callsign || ''
+  const key = `${hb}_${ab}_${cat}_${cs}`
   if (!_cache.has(key)) {
     if (_cache.size >= _CACHE_MAX) _cache.clear()
-    const col = altColor(alt)
-    const deg = hb - 90
+    const col   = altColor(alt)
+    const deg   = hb - 90
+    const label = cs ? `<span class="plane-label">${cs}</span>` : ''
 
     let icon
     if (cat === 'default') {
       icon = L.divIcon({
-        html:        `<span class="plane-icon" style="--r:${deg}deg;color:${col}">✈</span>`,
+        html:        `<div class="plane-marker"><span class="plane-icon" style="--r:${deg}deg;color:${col}">✈</span>${label}</div>`,
         className:   '',
         iconSize:    [20, 20],
         iconAnchor:  [10, 10],
@@ -104,7 +106,7 @@ export function makePlaneIcon(heading, alt, category = 'default') {
       const [w, h] = _SIZE[cat].iconSize
       const box    = Math.max(w, h) + 4
       icon = L.divIcon({
-        html: `<span class="plane-icon plane-icon--svg" style="display:flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;--r:${deg}deg;color:${col}">${_SVG[cat]}</span>`,
+        html: `<div class="plane-marker"><span class="plane-icon plane-icon--svg" style="display:flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;--r:${deg}deg;color:${col}">${_SVG[cat]}</span>${label}</div>`,
         className:   '',
         iconSize:    [box, box],
         iconAnchor:  [box / 2, box / 2],
