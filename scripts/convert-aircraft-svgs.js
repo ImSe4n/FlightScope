@@ -8,24 +8,44 @@ const outputDir = path.join(__dirname, '../frontend/src/assets/aircraft')
 
 fs.mkdirSync(outputDir, { recursive: true })
 
-// One representative image per category
+// All 16 images mapped to specific aircraft types
 const CATEGORY_MAP = {
-  heavy4:     'Screenshot 2026-05-21 163809.png',
-  widebody:   'Screenshot 2026-05-21 164148.png',
-  narrowbody: 'Screenshot 2026-05-21 163845.png',
-  regional:   'Screenshot 2026-05-21 163920.png',
-  turboprop:  'Screenshot 2026-05-21 163856.png',
-  bizjet:     'Screenshot 2026-05-21 163940.png',
+  b777:   'Screenshot 2026-05-21 163745.png',  // long body, huge GE90 engines
+  a320:   'Screenshot 2026-05-21 163756.png',  // medium narrowbody
+  a380:   'Screenshot 2026-05-21 163809.png',  // 4 engines, massive
+  b787:   'Screenshot 2026-05-21 163827.png',  // twin, raked wingtips
+  b737:   'Screenshot 2026-05-21 163845.png',  // narrowbody, shorter
+  atr:    'Screenshot 2026-05-21 163856.png',  // turboprop, straight wings
+  b747:   'Screenshot 2026-05-21 163908.png',  // 4 engines, upper-deck hump
+  crj:    'Screenshot 2026-05-21 163920.png',  // rear-engine regional
+  a321:   'Screenshot 2026-05-21 163930.png',  // longer narrowbody
+  bizjet: 'Screenshot 2026-05-21 163940.png',  // swept wings, rear engines
+  q400:   'Screenshot 2026-05-21 163953.png',  // turboprop variant
+  a330:   'Screenshot 2026-05-21 164004.png',  // older widebody twin
+  a350:   'Screenshot 2026-05-21 164148.png',  // modern widebody, curved tips
+  a319:   'Screenshot 2026-05-21 164203.png',  // short narrowbody
+  b767:   'Screenshot 2026-05-21 164219.png',  // older medium widebody
+  b757:   'Screenshot 2026-05-21 164234.png',  // long slender narrowbody
 }
 
-// Target display sizes (the SVGs point UP, so these are height×width when north-facing)
+// Target display sizes — larger aircraft get bigger icons
 const SIZES = {
-  heavy4:     { w: 48, h: 44 },
-  widebody:   { w: 42, h: 40 },
-  narrowbody: { w: 34, h: 30 },
-  regional:   { w: 28, h: 26 },
-  turboprop:  { w: 30, h: 28 },
-  bizjet:     { w: 26, h: 22 },
+  a380:   { w: 52, h: 48 },
+  b747:   { w: 50, h: 46 },
+  b777:   { w: 48, h: 42 },
+  b787:   { w: 44, h: 40 },
+  a350:   { w: 44, h: 40 },
+  a330:   { w: 42, h: 38 },
+  b767:   { w: 40, h: 36 },
+  b757:   { w: 38, h: 28 },
+  a321:   { w: 36, h: 30 },
+  b737:   { w: 34, h: 30 },
+  a320:   { w: 32, h: 28 },
+  a319:   { w: 30, h: 26 },
+  crj:    { w: 28, h: 24 },
+  q400:   { w: 30, h: 28 },
+  atr:    { w: 30, h: 28 },
+  bizjet: { w: 26, h: 22 },
 }
 
 async function extractMask(filepath) {
