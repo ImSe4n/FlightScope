@@ -17,31 +17,31 @@ export function altColor(alt) {
 
 // ── Aircraft silhouette SVGs ──────────────────────────────────────────────────
 // Top-down silhouettes, all pointing RIGHT (→). Nose at +x, tail at -x, wings ±y.
-// Draw order per SVG: tail stabilizers → wings → fuselage (covers roots) → engines.
+// Draw order: tail stabs → wings → [rear engine pods] → fuselage → [underwing engines]
 
 const _SVG = {
-  // 4-engine heavy (B747 / A380): very wide wings, 4 engine pods
-  heavy4: `<svg width="36" height="30" viewBox="-18 -15 36 30" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <path d="M-12,-2 L-17,-9 L-18,-9 L-14,2Z"/>
-    <path d="M-12,2 L-17,9 L-18,9 L-14,-2Z"/>
-    <path d="M5,0 L-3,-14 L-9,-14 L-2,0Z"/>
-    <path d="M5,0 L-3,14 L-9,14 L-2,0Z"/>
-    <ellipse cx="0" cy="0" rx="16" ry="3.2"/>
-    <ellipse cx="-0.5" cy="-8.5" rx="4" ry="1.4"/>
-    <ellipse cx="-0.5" cy="8.5" rx="4" ry="1.4"/>
-    <ellipse cx="-3" cy="-12" rx="3.5" ry="1.3"/>
-    <ellipse cx="-3" cy="12" rx="3.5" ry="1.3"/>
+  // 4-engine heavy (A380 / B747): massive wings, 4 pods, wide fuselage
+  heavy4: `<svg width="40" height="34" viewBox="-20 -17 40 34" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M-13,-2.5 L-17,-9 L-19,-9 L-15,2.5Z"/>
+    <path d="M-13,2.5 L-17,9 L-19,9 L-15,-2.5Z"/>
+    <path d="M6,0 L-1,-16 L-9,-16 L0,0Z"/>
+    <path d="M6,0 L-1,16 L-9,16 L0,0Z"/>
+    <ellipse cx="0" cy="0" rx="18" ry="4"/>
+    <ellipse cx="1" cy="-7" rx="4.5" ry="1.6"/>
+    <ellipse cx="1" cy="7" rx="4.5" ry="1.6"/>
+    <ellipse cx="-1" cy="-11.5" rx="4" ry="1.4"/>
+    <ellipse cx="-1" cy="11.5" rx="4" ry="1.4"/>
   </svg>`,
 
-  // Wide-body twin (B777 / A330 / B787 / A350): wide wings, 2 large engines
-  widebody: `<svg width="32" height="26" viewBox="-16 -13 32 26" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <path d="M-11,-1.5 L-15,-7 L-16,-7 L-12,1.5Z"/>
-    <path d="M-11,1.5 L-15,7 L-16,7 L-12,-1.5Z"/>
-    <path d="M4,0 L-3,-12 L-8,-12 L-2,0Z"/>
-    <path d="M4,0 L-3,12 L-8,12 L-2,0Z"/>
-    <ellipse cx="0" cy="0" rx="14" ry="2.8"/>
-    <ellipse cx="-1.5" cy="-8.5" rx="3.5" ry="1.2"/>
-    <ellipse cx="-1.5" cy="8.5" rx="3.5" ry="1.2"/>
+  // Wide-body twin (B777 / B787 / A330 / A350): long swept wings, 2 large engines
+  widebody: `<svg width="34" height="28" viewBox="-17 -14 34 28" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M-12,-1.8 L-16,-8 L-17,-8 L-13.5,1.8Z"/>
+    <path d="M-12,1.8 L-16,8 L-17,8 L-13.5,-1.8Z"/>
+    <path d="M5,0 L-3,-13 L-8,-13 L-1,0Z"/>
+    <path d="M5,0 L-3,13 L-8,13 L-1,0Z"/>
+    <ellipse cx="0" cy="0" rx="15" ry="3"/>
+    <ellipse cx="-1.5" cy="-8.5" rx="4" ry="1.5"/>
+    <ellipse cx="-1.5" cy="8.5" rx="4" ry="1.5"/>
   </svg>`,
 
   // Narrow-body (B737 / A320): swept wings, 2 underwing engines
@@ -55,23 +55,47 @@ const _SVG = {
     <ellipse cx="-1" cy="7" rx="3" ry="1"/>
   </svg>`,
 
-  // Regional jet (CRJ / E-jets / ATR): slim fuselage, shorter wingspan
-  regional: `<svg width="22" height="18" viewBox="-11 -9 22 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <path d="M-7,-0.8 L-10,-3.5 L-10.5,-3.5 L-8,0.8Z"/>
-    <path d="M-7,0.8 L-10,3.5 L-10.5,3.5 L-8,-0.8Z"/>
-    <path d="M2.5,0 L-2,-8 L-5.5,-8 L-1.5,0Z"/>
-    <path d="M2.5,0 L-2,8 L-5.5,8 L-1.5,0Z"/>
+  // Regional jet (CRJ / E-jet): slim fuselage, clean wings, rear-mounted engine pods
+  regional: `<svg width="26" height="18" viewBox="-13 -9 26 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M-9,-0.8 L-12,-5 L-13,-5 L-10,0.8Z"/>
+    <path d="M-9,0.8 L-12,5 L-13,5 L-10,-0.8Z"/>
+    <path d="M3,0 L-1,-8 L-4,-8 L-1,0Z"/>
+    <path d="M3,0 L-1,8 L-4,8 L-1,0Z"/>
+    <ellipse cx="-7.5" cy="-3" rx="3" ry="1.2"/>
+    <ellipse cx="-7.5" cy="3" rx="3" ry="1.2"/>
+    <ellipse cx="0" cy="0" rx="11" ry="1.9"/>
+  </svg>`,
+
+  // Turboprop (ATR-72 / Dash-8): nearly straight wings, fat nacelles, T-tail
+  turboprop: `<svg width="24" height="20" viewBox="-12 -10 24 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M-8,-0.8 L-10.5,-5 L-11,-5 L-9,0.8Z"/>
+    <path d="M-8,0.8 L-10.5,5 L-11,5 L-9,-0.8Z"/>
+    <path d="M2,0 L0,-9 L-3,-9 L-1,0Z"/>
+    <path d="M2,0 L0,9 L-3,9 L-1,0Z"/>
     <ellipse cx="0" cy="0" rx="9.5" ry="1.8"/>
-    <ellipse cx="-0.5" cy="-5.5" rx="2.2" ry="0.8"/>
-    <ellipse cx="-0.5" cy="5.5" rx="2.2" ry="0.8"/>
+    <ellipse cx="0" cy="-5.5" rx="3" ry="1.6"/>
+    <ellipse cx="0" cy="5.5" rx="3" ry="1.6"/>
+  </svg>`,
+
+  // Business jet (Gulfstream / Learjet): highly swept wings, rear engine pods, slim
+  bizjet: `<svg width="24" height="16" viewBox="-12 -8 24 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M-9,-0.5 L-11,-5.5 L-11.5,-5.5 L-10,0.5Z"/>
+    <path d="M-9,0.5 L-11,5.5 L-11.5,5.5 L-10,-0.5Z"/>
+    <path d="M4,0 L-3,-7 L-6,-7 L-1,0Z"/>
+    <path d="M4,0 L-3,7 L-6,7 L-1,0Z"/>
+    <ellipse cx="-7.5" cy="-2.5" rx="2.5" ry="1"/>
+    <ellipse cx="-7.5" cy="2.5" rx="2.5" ry="1"/>
+    <ellipse cx="0" cy="0" rx="10" ry="1.5"/>
   </svg>`,
 }
 
 const _SIZE = {
-  heavy4:     { iconSize: [36, 30], iconAnchor: [18, 15] },
-  widebody:   { iconSize: [32, 26], iconAnchor: [16, 13] },
+  heavy4:     { iconSize: [40, 34], iconAnchor: [20, 17] },
+  widebody:   { iconSize: [34, 28], iconAnchor: [17, 14] },
   narrowbody: { iconSize: [28, 22], iconAnchor: [14, 11] },
-  regional:   { iconSize: [22, 18], iconAnchor: [11, 9]  },
+  regional:   { iconSize: [26, 18], iconAnchor: [13, 9]  },
+  turboprop:  { iconSize: [24, 20], iconAnchor: [12, 10] },
+  bizjet:     { iconSize: [24, 16], iconAnchor: [12, 8]  },
   default:    { iconSize: [20, 20], iconAnchor: [10, 10] },
 }
 

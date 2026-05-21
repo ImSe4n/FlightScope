@@ -16,8 +16,14 @@ export function categorize(typeCode) {
   // Narrow-body (737 classic/NG/MAX, 757, A220, A319/320/321 classic+neo, MD-80/90, DC-9, 717)
   if (/^(B73[5-9]|B3[789]M|B3XM|B757|B75[67]|A31[89]|A19N|A20N|A21N|A32[0-3]|A22[01]|MD[89][0-5]|DC9|B717)/.test(t)) return 'narrowbody'
 
-  // Regional jets and turboprops (CRJ, E-jets 170–195, ATR, Dash-8, etc.)
-  if (/^(CRJ|E1[45][05]|E17[05]|E19[05]|E27[05]|E4[45]|E75[SL]?|SF3|BEH|DH8[ABCD]?|AT[47]|F50|CL60|GLF|LJ[34567]|FA7|PC12|C208|BE20|B190)/.test(t)) return 'regional'
+  // Business jets (Gulfstream, Learjet, Falcon, Challenger, Citation, Global)
+  if (/^(GLF|LJ[34567]|FA[278X]|CL60|CL65|GLEX|GALX|H25[ABC]|E50P|C56[05X]|C68A|C750|PC24)/.test(t)) return 'bizjet'
+
+  // Turboprops (ATR, Dash-8, King Air, Caravan, Saab 340, PC-12, Fokker 50)
+  if (/^(AT[47]|DH8[ABCD]?|PC12|C208|BE20|BEH|B190|SF3|F50)/.test(t)) return 'turboprop'
+
+  // Regional jets (CRJ, Embraer E-jets)
+  if (/^(CRJ|E1[45][05]|E17[05]|E19[05]|E27[05]|E4[45]|E75[SL]?)/.test(t)) return 'regional'
 
   return 'default'  // military, unknown, GA → ✈ emoji
 }
