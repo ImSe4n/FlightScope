@@ -16,64 +16,63 @@ export function altColor(alt) {
 }
 
 // ── Aircraft silhouette SVGs ──────────────────────────────────────────────────
-// All icons point RIGHT (→) by default, matching the ✈ emoji, so existing
-// heading rotation (hb - 90) still works identically.
-// Coordinate system: nose at +x, wings at ±y, tail at -x.
+// Top-down silhouettes, all pointing RIGHT (→). Nose at +x, tail at -x, wings ±y.
+// Draw order per SVG: tail stabilizers → wings → fuselage (covers roots) → engines.
 
 const _SVG = {
-  // 4-engine heavy (A380 / 747): extra-wide wings, 4 engine pods
-  heavy4: `<svg width="28" height="18" viewBox="-16 -9 32 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="0" cy="0" rx="13" ry="2.4"/>
-    <path d="M0-2.4L-14-9L-16-9L-4 2.4Z"/>
-    <path d="M0 2.4L-14 9L-16 9L-4-2.4Z"/>
-    <ellipse cx="-5.5" cy="-6.5" rx="2.6" ry="1.1"/>
-    <ellipse cx="-9.5" cy="-7.8" rx="2.2" ry="1"/>
-    <ellipse cx="-5.5" cy="6.5" rx="2.6" ry="1.1"/>
-    <ellipse cx="-9.5" cy="7.8" rx="2.2" ry="1"/>
-    <path d="M-12-2.4L-15.5-5.5L-16-5.5L-13 2.4Z"/>
-    <path d="M-12 2.4L-15.5 5.5L-16 5.5L-13-2.4Z"/>
+  // 4-engine heavy (B747 / A380): very wide wings, 4 engine pods
+  heavy4: `<svg width="36" height="30" viewBox="-18 -15 36 30" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M-12,-2 L-17,-9 L-18,-9 L-14,2Z"/>
+    <path d="M-12,2 L-17,9 L-18,9 L-14,-2Z"/>
+    <path d="M5,0 L-3,-14 L-9,-14 L-2,0Z"/>
+    <path d="M5,0 L-3,14 L-9,14 L-2,0Z"/>
+    <ellipse cx="0" cy="0" rx="16" ry="3.2"/>
+    <ellipse cx="-0.5" cy="-8.5" rx="4" ry="1.4"/>
+    <ellipse cx="-0.5" cy="8.5" rx="4" ry="1.4"/>
+    <ellipse cx="-3" cy="-12" rx="3.5" ry="1.3"/>
+    <ellipse cx="-3" cy="12" rx="3.5" ry="1.3"/>
   </svg>`,
 
-  // Wide-body twin (777 / A330 / 787 / A350): wide wings, 2 large engines
-  widebody: `<svg width="24" height="15" viewBox="-14 -7.5 28 15" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="0" cy="0" rx="12" ry="2"/>
-    <path d="M0-2L-12-7.5L-14-7.5L-4 2Z"/>
-    <path d="M0 2L-12 7.5L-14 7.5L-4-2Z"/>
-    <ellipse cx="-8" cy="-5.8" rx="2.8" ry="1.2"/>
-    <ellipse cx="-8" cy="5.8" rx="2.8" ry="1.2"/>
-    <path d="M-11-2L-14-4.8L-14.5-4.8L-12 2Z"/>
-    <path d="M-11 2L-14 4.8L-14.5 4.8L-12-2Z"/>
+  // Wide-body twin (B777 / A330 / B787 / A350): wide wings, 2 large engines
+  widebody: `<svg width="32" height="26" viewBox="-16 -13 32 26" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M-11,-1.5 L-15,-7 L-16,-7 L-12,1.5Z"/>
+    <path d="M-11,1.5 L-15,7 L-16,7 L-12,-1.5Z"/>
+    <path d="M4,0 L-3,-12 L-8,-12 L-2,0Z"/>
+    <path d="M4,0 L-3,12 L-8,12 L-2,0Z"/>
+    <ellipse cx="0" cy="0" rx="14" ry="2.8"/>
+    <ellipse cx="-1.5" cy="-8.5" rx="3.5" ry="1.2"/>
+    <ellipse cx="-1.5" cy="8.5" rx="3.5" ry="1.2"/>
   </svg>`,
 
-  // Narrow-body (737 / A320): standard swept wings, 2 engines
-  narrowbody: `<svg width="20" height="13" viewBox="-13 -6.5 26 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="0" cy="0" rx="11" ry="1.8"/>
-    <path d="M0-1.8L-10-6.5L-12-6.5L-3 1.8Z"/>
-    <path d="M0 1.8L-10 6.5L-12 6.5L-3-1.8Z"/>
-    <ellipse cx="-7" cy="-5" rx="2.3" ry="1"/>
-    <ellipse cx="-7" cy="5" rx="2.3" ry="1"/>
-    <path d="M-9-1.8L-12-4L-13-4L-10 1.8Z"/>
-    <path d="M-9 1.8L-12 4L-13 4L-10-1.8Z"/>
+  // Narrow-body (B737 / A320): swept wings, 2 underwing engines
+  narrowbody: `<svg width="28" height="22" viewBox="-14 -11 28 22" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M-9,-1.2 L-13,-5.5 L-14,-5.5 L-10,1.2Z"/>
+    <path d="M-9,1.2 L-13,5.5 L-14,5.5 L-10,-1.2Z"/>
+    <path d="M3,0 L-3,-10 L-7,-10 L-2,0Z"/>
+    <path d="M3,0 L-3,10 L-7,10 L-2,0Z"/>
+    <ellipse cx="0" cy="0" rx="12" ry="2.2"/>
+    <ellipse cx="-1" cy="-7" rx="3" ry="1"/>
+    <ellipse cx="-1" cy="7" rx="3" ry="1"/>
   </svg>`,
 
-  // Regional jet / turboprop (CRJ / E-jets / ATR): slim, shorter wingspan
-  regional: `<svg width="16" height="10" viewBox="-11 -5 22 10" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="0" cy="0" rx="9" ry="1.5"/>
-    <path d="M0-1.5L-8-5L-10-5L-3 1.5Z"/>
-    <path d="M0 1.5L-8 5L-10 5L-3-1.5Z"/>
-    <ellipse cx="-5.5" cy="-4" rx="1.8" ry="0.85"/>
-    <ellipse cx="-5.5" cy="4" rx="1.8" ry="0.85"/>
-    <path d="M-7-1.5L-10-3.3L-11-3.3L-8 1.5Z"/>
-    <path d="M-7 1.5L-10 3.3L-11 3.3L-8-1.5Z"/>
+  // Regional jet (CRJ / E-jets / ATR): slim fuselage, shorter wingspan
+  regional: `<svg width="22" height="18" viewBox="-11 -9 22 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M-7,-0.8 L-10,-3.5 L-10.5,-3.5 L-8,0.8Z"/>
+    <path d="M-7,0.8 L-10,3.5 L-10.5,3.5 L-8,-0.8Z"/>
+    <path d="M2.5,0 L-2,-8 L-5.5,-8 L-1.5,0Z"/>
+    <path d="M2.5,0 L-2,8 L-5.5,8 L-1.5,0Z"/>
+    <ellipse cx="0" cy="0" rx="9.5" ry="1.8"/>
+    <ellipse cx="-0.5" cy="-5.5" rx="2.2" ry="0.8"/>
+    <ellipse cx="-0.5" cy="5.5" rx="2.2" ry="0.8"/>
   </svg>`,
 }
 
 const _SIZE = {
-  heavy4:     { iconSize: [28, 18], iconAnchor: [14, 9]   },
-  widebody:   { iconSize: [24, 15], iconAnchor: [12, 7.5] },
-  narrowbody: { iconSize: [20, 13], iconAnchor: [10, 6.5] },
-  regional:   { iconSize: [16, 10], iconAnchor: [8,  5]   },
-  default:    { iconSize: [20, 20], iconAnchor: [10, 10]  },
+  heavy4:     { iconSize: [36, 30], iconAnchor: [18, 15] },
+  widebody:   { iconSize: [32, 26], iconAnchor: [16, 13] },
+  narrowbody: { iconSize: [28, 22], iconAnchor: [14, 11] },
+  regional:   { iconSize: [22, 18], iconAnchor: [11, 9]  },
+  default:    { iconSize: [20, 20], iconAnchor: [10, 10] },
 }
 
 // Cache keyed by heading-bucket × altitude-bucket × category.

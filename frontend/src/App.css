@@ -691,6 +691,7 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 }
 .plane-icon--svg {
   font-size: 0; line-height: 0;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.9));
 }
 .plane-icon--svg svg { display: block; }
 
