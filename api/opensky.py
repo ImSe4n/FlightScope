@@ -103,10 +103,10 @@ def _fetch_adsb(url: str) -> list | None:
     try:
         r = requests.get(url, timeout=15, headers={"User-Agent": "FlightScope/1.0"})
         if not r.ok:
-            print(f"[adsb] {url} → HTTP {r.status_code}")
+            print(f"[adsb] {url} -> HTTP {r.status_code}")
             return None
         ac_list = r.json().get("ac", [])
-        print(f"[adsb] {url} → {r.status_code}, {len(ac_list)} aircraft")
+        print(f"[adsb] {url} -> {r.status_code}, {len(ac_list)} aircraft")
         out = []
         for ac in ac_list:
             try:
@@ -145,7 +145,7 @@ def _fetch_adsb(url: str) -> list | None:
                 continue
         return out or None
     except Exception as exc:
-        print(f"[adsb] {url} → exception: {exc}")
+        print(f"[adsb] {url} -> exception: {exc}")
         return None
 
 
@@ -298,7 +298,7 @@ def get_route(callsign: str):
     return {}
 
 
-_history_cache: dict = {}   # icao24 → (result, timestamp)
+_history_cache: dict = {}   # icao24 -> (result, timestamp)
 HISTORY_CACHE_TTL = 300     # 5 minutes — OpenSky updates flight records slowly
 
 
@@ -340,7 +340,7 @@ def _clean_flight(fl: dict) -> dict:
 
 # Route cache for airport-flights enrichment — routes are stable, keep for 24 h
 # Miss entries expire sooner (1 h) so transient adsbdb failures don't block permanently.
-_route_cache: dict = {}        # callsign → (dep_icao | None, arr_icao | None, timestamp)
+_route_cache: dict = {}        # callsign -> (dep_icao | None, arr_icao | None, timestamp)
 _ROUTE_TTL_HIT  = 86_400       # 24 h for successful lookups
 _ROUTE_TTL_MISS = 3_600        # 1 h for failed lookups
 
@@ -373,7 +373,7 @@ def _lookup_route(cs: str) -> tuple[str, str] | None:
 
 # Cache the full airport-flights response for 10 minutes so the parallel
 # route enrichment only runs once per airport per session.
-_apf_cache: dict = {}     # ident → (result, timestamp)
+_apf_cache: dict = {}     # ident -> (result, timestamp)
 _APF_CACHE_TTL = 600
 
 
