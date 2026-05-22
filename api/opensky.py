@@ -203,8 +203,6 @@ def get_flights():
             print(f"[flights] opensky retry: HTTP {r.status_code}")
         if r.status_code == 429:
             _flight_backoff_ts = now + FLIGHT_BACKOFF
-            if _flight_cache is not None:
-                return {**_flight_cache, "stale": True}
         elif r.ok:
             clean = _opensky_clean(r.json())
             if clean:
@@ -219,6 +217,23 @@ def get_flights():
                 return result
     except Exception as exc:
         print(f"[flights] opensky exception: {exc}")
+
+    # OpenSky failed/rate-limited — try adsb.fi (includes aircraft type)
+    print("[flights] falling back to adsb.fi")
+    try:
+        adsb = _fetch_global_adsb()
+        if adsb:
+            result = {
+                "flights":   adsb,
+                "count":     len(adsb),
+                "source":    "adsb.fi",
+                "timestamp": datetime.now().isoformat(),
+            }
+            _flight_cache    = result
+            _flight_cache_ts = now
+            return result
+    except Exception as exc:
+        print(f"[flights] adsb.fi exception: {exc}")
 
     _flight_backoff_ts = now + FLIGHT_BACKOFF
     if _flight_cache is not None:

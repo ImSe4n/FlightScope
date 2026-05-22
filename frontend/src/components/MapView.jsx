@@ -237,6 +237,26 @@ function RadarLayer() {
   return <TileLayer url={url} opacity={0.55} zIndex={450} tms={false} />
 }
 
+// ── Lazy aircraft-type enrichment (for OpenSky flights that have no acType) ───
+// Module-level so the sets persist across re-renders and don't cause loops.
+const _enriched  = new Set()
+const _enriching = new Set()
+
+function _enrichBatch(ids, onDone) {
+  const toFetch = ids.filter(id => !_enriched.has(id) && !_enriching.has(id)).slice(0, 10)
+  if (!toFetch.length) return
+  toFetch.forEach(id => _enriching.add(id))
+  let pending = toFetch.length
+  const finish = () => { if (--pending === 0) onDone() }
+  for (const id of toFetch) {
+    fetch(`/api/aircraft/${id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.ICAOTypeCode) setCachedType(id, d.ICAOTypeCode) })
+      .catch(() => {})
+      .finally(() => { _enriched.add(id); _enriching.delete(id); finish() })
+  }
+}
+
 // ── Imperative flight layer ───────────────────────────────────────────────────
 const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
   const map        = useMap()
@@ -281,6 +301,13 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
       if (!wanted.has(id)) { toRemove.push(e.marker); existing.delete(id) }
     }
     if (toRemove.length) cg.removeLayers(toRemove)
+
+    // Kick off background type lookups for OpenSky flights (no acType field)
+    const untyped = []
+    for (const [id, f] of wanted) {
+      if (!f.acType && getCachedType(id) === 'default') untyped.push(id)
+    }
+    if (untyped.length) _enrichBatch(untyped, sync)
 
     const toAdd = []
     for (const [id, f] of wanted) {

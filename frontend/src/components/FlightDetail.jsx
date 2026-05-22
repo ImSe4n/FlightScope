@@ -159,12 +159,6 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
     ?? (routeMatchesDep ? route?.route?.[route.route.length - 1] : null)
     ?? null
 
-  // Prefer AeroDataBox times when available (more precise), fall back to OpenSky history
-  const depTime  = flightStatus?.departure?.actual   ?? flightStatus?.departure?.scheduled   ?? (latest?.firstSeen ? hhmm(latest.firstSeen) : null)
-  const arrTime  = flightStatus?.arrival?.estimated  ?? flightStatus?.arrival?.scheduled     ?? (latest?.lastSeen  ? hhmm(latest.lastSeen)  : null)
-  const depTimeDisplay = flightStatus ? fmtIso(depTime) : (latest?.firstSeen ? hhmm(latest.firstSeen) : null)
-  const arrTimeDisplay = flightStatus ? fmtIso(arrTime) : (latest?.lastSeen  ? hhmm(latest.lastSeen)  : null)
-
   const depTerminal = flightStatus?.departure?.terminal
   const depGate     = flightStatus?.departure?.gate
   const arrTerminal = flightStatus?.arrival?.terminal
@@ -182,6 +176,20 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
       + Math.cos(f.lat * Math.PI / 180) * Math.cos(toInfo.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2
     return Math.round(R * 2 * Math.asin(Math.sqrt(a)) * 0.539957)
   })()
+
+  // Prefer AeroDataBox times when available (more precise)
+  const depTime  = flightStatus?.departure?.actual   ?? flightStatus?.departure?.scheduled   ?? null
+  const arrTime  = flightStatus?.arrival?.estimated  ?? flightStatus?.arrival?.scheduled     ?? null
+  const depTimeDisplay = flightStatus ? fmtIso(depTime) : (latest?.firstSeen ? hhmm(latest.firstSeen) : null)
+  // Fallback ETA: compute from current speed + distance when AeroDataBox unavailable
+  const computedEta = (() => {
+    if (flightStatus || f.onGround) return null
+    const speedKts = f.speed != null ? f.speed * 1.94384 : 0
+    if (speedKts < 50 || distNm == null || distNm <= 0) return null
+    return new Date(Date.now() + distNm / speedKts * 3_600_000)
+      .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })
+  })()
+  const arrTimeDisplay = flightStatus ? fmtIso(arrTime) : computedEta
 
   // Distance-based flight progress (accurate even when ETA is stale)
   const [progressPct, progressElapsed, progressRemaining] = useMemo(() => {
