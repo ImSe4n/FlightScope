@@ -175,17 +175,89 @@ def _fetch_global_adsb() -> list | None:
     return combined or None
 
 
+# Cache of icao24 -> acType from adsb.fi — refreshed alongside OpenSky calls
+_type_cache: dict[str, str] = {}
+_type_cache_ts = 0.0
+_TYPE_CACHE_TTL = 120   # seconds
+
+
+def _refresh_type_cache():
+    """Fetch one or two adsb.fi tiles to build a type-code lookup table."""
+    global _type_cache, _type_cache_ts
+    now = time.time()
+    if now - _type_cache_ts < _TYPE_CACHE_TTL:
+        return
+
+    # Two high-traffic tiles: North Atlantic corridor + North America West
+    tiles = [(51, -10), (40, -90)]
+    new_map: dict[str, str] = {}
+    for lat, lon in tiles:
+        batch = _fetch_adsb(f"https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/500")
+        if batch:
+            for f in batch:
+                if f["icao24"] and f.get("acType"):
+                    new_map[f["icao24"]] = f["acType"]
+
+    if new_map:
+        _type_cache.update(new_map)
+        _type_cache_ts = now
+        print(f"[types] refreshed {len(new_map)} type codes from adsb.fi")
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
 @router.get("/api/flights")
 def get_flights():
-    """Live aircraft positions — adsb.fi primary (has acType), OpenSky fallback."""
+    """Live aircraft positions — OpenSky primary, adsb.fi fallback."""
     global _flight_cache, _flight_cache_ts, _flight_backoff_ts
     now = time.time()
 
     if _flight_cache is not None and now - _flight_cache_ts < FLIGHT_CACHE_TTL:
         return _flight_cache
 
-    # Primary: adsb.fi — no auth, includes aircraft type codes
+    # Refresh type-code cache in background (non-blocking — uses cached value if fresh)
+    try:
+        _refresh_type_cache()
+    except Exception:
+        pass
+
+    # Primary: OpenSky — large global dataset
+    if now >= _flight_backoff_ts:
+        try:
+            r = requests.get(
+                "https://opensky-network.org/api/states/all",
+                timeout=15, headers=opensky.headers())
+            print(f"[flights] opensky: HTTP {r.status_code}")
+            if r.status_code == 401:
+                opensky.token = None
+                r = requests.get(
+                    "https://opensky-network.org/api/states/all",
+                    timeout=15, headers=opensky.headers())
+                print(f"[flights] opensky retry: HTTP {r.status_code}")
+            if r.status_code == 429:
+                _flight_backoff_ts = now + FLIGHT_BACKOFF
+            elif r.ok:
+                clean = _opensky_clean(r.json())
+                if clean:
+                    # Enrich with type codes from adsb.fi cache where available
+                    for f in clean:
+                        t = _type_cache.get(f["icao24"])
+                        if t:
+                            f["acType"] = t
+                    typed = sum(1 for f in clean if f.get("acType"))
+                    print(f"[flights] opensky: {len(clean)} flights, {typed} with type codes")
+                    result = {
+                        "flights":   clean,
+                        "count":     len(clean),
+                        "source":    "opensky",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                    _flight_cache    = result
+                    _flight_cache_ts = now
+                    return result
+        except Exception as exc:
+            print(f"[flights] opensky exception: {exc}")
+
+    # Fallback: adsb.fi — no auth required, includes type codes
     try:
         adsb = _fetch_global_adsb()
         if adsb:
@@ -201,41 +273,6 @@ def get_flights():
     except Exception as exc:
         print(f"[flights] adsb.fi exception: {exc}")
 
-    # Fallback: OpenSky (no aircraft types, rate-limited)
-    if now < _flight_backoff_ts:
-        if _flight_cache is not None:
-            return {**_flight_cache, "stale": True}
-        return {"flights": [], "count": 0, "error": "Sources temporarily unavailable"}
-
-    try:
-        r = requests.get(
-            "https://opensky-network.org/api/states/all",
-            timeout=15, headers=opensky.headers())
-        print(f"[flights] opensky: HTTP {r.status_code}")
-        if r.status_code == 401:
-            opensky.token = None
-            r = requests.get(
-                "https://opensky-network.org/api/states/all",
-                timeout=15, headers=opensky.headers())
-            print(f"[flights] opensky retry: HTTP {r.status_code}")
-        if r.status_code == 429:
-            _flight_backoff_ts = now + FLIGHT_BACKOFF
-        elif r.ok:
-            clean = _opensky_clean(r.json())
-            if clean:
-                result = {
-                    "flights":   clean,
-                    "count":     len(clean),
-                    "source":    "opensky",
-                    "timestamp": datetime.now().isoformat(),
-                }
-                _flight_cache    = result
-                _flight_cache_ts = now
-                return result
-    except Exception as exc:
-        print(f"[flights] opensky exception: {exc}")
-
-    _flight_backoff_ts = now + FLIGHT_BACKOFF
     if _flight_cache is not None:
         return {**_flight_cache, "stale": True}
     return {"flights": [], "count": 0, "error": "All flight data sources unavailable"}
