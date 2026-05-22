@@ -139,6 +139,7 @@ def _fetch_adsb(url: str) -> list | None:
                     "squawk":      str(ac.get("squawk") or ""),
                     "spi":         False,
                     "source":      0,
+                    "acType":      (ac.get("t") or "").strip(),
                 })
             except Exception:
                 continue

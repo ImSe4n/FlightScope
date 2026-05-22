@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 're
 import L from 'leaflet'
 import 'leaflet.markercluster'
 import { makePlaneIcon, makeEmergencyIcon, makeSelectedIcon, AIRPORT_ICON, altBucket, altColor } from '../utils/icons'
-import { getCachedType } from '../utils/aircraftTypes'
+import { getCachedType, setCachedType } from '../utils/aircraftTypes'
 import { TILE_LAYERS, EMERGENCY_SQUAWKS } from '../utils/constants'
 import { AirportPopup } from './Popups'
 
@@ -287,6 +287,7 @@ const FlightLayer = memo(function FlightLayer({ flights, onSelect }) {
       const isEmg  = Boolean(EMERGENCY_SQUAWKS[String(f.squawk)])
       const newHb  = Math.round((f.heading ?? 0) / 10) * 10
       const newAb  = altBucket(f.alt)
+      if (f.acType) setCachedType(id, f.acType)
       const newCat = getCachedType(id)
       const newCs  = f.callsign || ''
       const e      = existing.get(id)
