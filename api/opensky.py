@@ -93,10 +93,13 @@ def _opensky_clean(data: dict) -> list:
     df.columns = FLIGHT_COLUMNS
     df = df[df["lat"].notna() & df["lon"].notna()]
     rows = df.to_dict(orient="records")
-    return [
-        {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in r.items()}
-        for r in rows
-    ]
+    out = []
+    for r in rows:
+        clean = {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in r.items()}
+        if isinstance(clean.get("callsign"), str):
+            clean["callsign"] = clean["callsign"].strip() or None
+        out.append(clean)
+    return out
 
 
 def _fetch_adsb(url: str, timeout: int = 8) -> list | None:
@@ -278,15 +281,29 @@ def get_flights():
     return {"flights": [], "count": 0, "error": "All flight data sources unavailable"}
 
 
+_track_cache: dict = {}   # icao24 -> (result, timestamp)
+_TRACK_CACHE_TTL = 120    # 2 minutes — tracks don't change fast
+
+
 @router.get("/api/track/{icao24}")
 def get_track(icao24: str):
+    icao = icao24.lower()
+    now  = time.time()
+    if icao in _track_cache:
+        cached, ts = _track_cache[icao]
+        if now - ts < _TRACK_CACHE_TTL:
+            return cached
     try:
         r = requests.get(
-            f"https://opensky-network.org/api/tracks/all?icao24={icao24.lower()}&time=0",
-            timeout=10)
-        return r.json() if r.ok else {"icao24": icao24, "path": []}
+            f"https://opensky-network.org/api/tracks/all?icao24={icao}&time=0",
+            timeout=10, headers=opensky.headers())
+        if r.ok:
+            result = r.json()
+            _track_cache[icao] = (result, now)
+            return result
     except Exception:
-        return {"icao24": icao24, "path": []}
+        pass
+    return {"icao24": icao24, "path": []}
 
 
 @router.get("/api/aircraft/{icao24}")
