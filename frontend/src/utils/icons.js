@@ -146,7 +146,7 @@ export function makeSelectedIcon(heading, category = 'default') {
   const box = Math.max(sw, sh) + 8
   const svg = _SVG[cat].replace(/^<svg width="\d+" height="\d+"/, `<svg width="${sw}" height="${sh}"`)
   return L.divIcon({
-    html: `<span class="plane-icon--svg plane-icon--sel" style="display:flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;--r:${hb}deg;color:#fff;filter:drop-shadow(0 0 4px #38bdf8)">${svg}</span>`,
+    html: `<span class="plane-icon plane-icon--svg plane-icon--sel" style="display:flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;--r:${hb}deg">${svg}</span>`,
     className: '',
     iconSize:   [box, box],
     iconAnchor: [box / 2, box / 2],
