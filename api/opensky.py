@@ -76,8 +76,8 @@ _flight_cache      = None   # last successful response dict
 _flight_cache_ts   = 0.0
 _flight_backoff_ts = 0.0
 
-FLIGHT_CACHE_TTL = 60    # seconds
-FLIGHT_BACKOFF   = 90    # seconds to wait after a total failure
+FLIGHT_CACHE_TTL = 90    # seconds — keeps OpenSky anonymous call rate under limit
+FLIGHT_BACKOFF   = 120   # seconds to wait after a total failure
 
 
 def get_flight_cache() -> dict | None:
@@ -150,59 +150,61 @@ def _fetch_adsb(url: str, timeout: int = 8) -> list | None:
         return None
 
 
-_TILE_CENTRES = [
-    (51, -30), (51,  10), (40, -85), (37, -115),
-    (35, 140), (10, 110), (25,  55), (20,   80),
-    (-15, -55), (-28, 133),
+# Four large tiles covering major commercial-aviation regions.
+# Sequential requests (not parallel) avoid triggering rate limits.
+_GLOBAL_TILES = [
+    (45, -95),   # North America
+    (50,  15),   # Europe + North Africa
+    (25,  90),   # Asia (India / China / SE Asia)
+    (-20,  25),  # Africa + South Atlantic
 ]
+_TILE_RADIUS = 1200   # nautical miles per tile
 
 
 def _fetch_global_adsb() -> list | None:
-    """Cover the globe with tiled adsb.fi queries; deduplicate by icao24."""
-    def _region(lat, lon):
-        return _fetch_adsb(f"https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/250")
-
-    with ThreadPoolExecutor(max_workers=len(_TILE_CENTRES)) as ex:
-        batches = list(ex.map(lambda c: _region(*c), _TILE_CENTRES))
-
+    """Sequential 4-tile fetch from airplanes.live; accepts partial success."""
     seen, combined = set(), []
-    for batch in batches:
-        for f in (batch or []):
-            if f["icao24"] not in seen:
-                seen.add(f["icao24"])
-                combined.append(f)
-
-    print(f"[adsb.fi] tiled: {len(combined)} unique aircraft")
+    for lat, lon in _GLOBAL_TILES:
+        url   = f"https://api.airplanes.live/v2/point/{lat}/{lon}/{_TILE_RADIUS}"
+        batch = _fetch_adsb(url, timeout=10)
+        if batch:
+            for f in batch:
+                if f["icao24"] not in seen:
+                    seen.add(f["icao24"])
+                    combined.append(f)
+        time.sleep(0.3)   # small gap to be polite
+    print(f"[airplanes.live] {len(combined)} unique aircraft from {len(_GLOBAL_TILES)} tiles")
     return combined or None
 
 
-# Cache of icao24 -> acType from adsb.fi — refreshed alongside OpenSky calls
+# Cache of icao24 -> acType from airplanes.live — refreshed in background
 _type_cache: dict[str, str] = {}
 _type_cache_ts = 0.0
-_TYPE_CACHE_TTL = 120   # seconds
+_TYPE_CACHE_TTL = 180   # seconds
 
 
 def _refresh_type_cache():
-    """Fetch one or two adsb.fi tiles to build a type-code lookup table."""
+    """Grab type codes from two high-traffic airplanes.live tiles, cache them."""
     global _type_cache, _type_cache_ts
     now = time.time()
     if now - _type_cache_ts < _TYPE_CACHE_TTL:
         return
 
-    # Two high-traffic tiles: North Atlantic corridor + North America West
-    tiles = [(51, -10), (40, -90)]
+    tiles = [(45, -95), (50, 15)]   # NA + Europe
     new_map: dict[str, str] = {}
     for lat, lon in tiles:
-        batch = _fetch_adsb(f"https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/500", timeout=5)
+        url   = f"https://api.airplanes.live/v2/point/{lat}/{lon}/1200"
+        batch = _fetch_adsb(url, timeout=8)
         if batch:
             for f in batch:
                 if f["icao24"] and f.get("acType"):
                     new_map[f["icao24"]] = f["acType"]
+        time.sleep(0.3)
 
     if new_map:
         _type_cache.update(new_map)
         _type_cache_ts = now
-        print(f"[types] refreshed {len(new_map)} type codes from adsb.fi")
+        print(f"[types] {len(new_map)} type codes cached from airplanes.live")
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
