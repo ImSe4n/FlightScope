@@ -481,12 +481,12 @@ function AltLegend() {
 }
 
 // ── Selected-flight marker ────────────────────────────────────────────────────
-function SelectedMarker({ selectedPos }) {
+function SelectedMarker({ selectedPos, selectedCat }) {
   if (!selectedPos?.lat || !selectedPos?.lon) return null
   return (
     <Marker
       position={[selectedPos.lat, selectedPos.lon]}
-      icon={makeSelectedIcon(selectedPos.heading)}
+      icon={makeSelectedIcon(selectedPos.heading, selectedCat)}
       zIndexOffset={1000}
     />
   )
@@ -555,6 +555,7 @@ export default function MapView({ flights, airports, selected, selectedPos, live
     () => selected ? flights.filter(f => f.icao24 !== selected.icao24) : flights,
     [flights, selected],
   )
+  const selectedCat = selected ? getCachedType(selected.icao24) : 'default'
 
   return (
     <div className="map-wrap">
@@ -587,7 +588,7 @@ export default function MapView({ flights, airports, selected, selectedPos, live
 
         <TrackLayer track={track} selected={selected} />
         <FlightLayer flights={layerFlights} onSelect={onSelect} />
-        <SelectedMarker selectedPos={selectedPos} />
+        <SelectedMarker selectedPos={selectedPos} selectedCat={selectedCat} />
         <AirportLayer airports={airports} liveFlights={liveFlights} onFlightSelect={onFlightSelect} />
       </MapContainer>
 

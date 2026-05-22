@@ -178,13 +178,30 @@ def _fetch_global_adsb() -> list | None:
 # ── Routes ─────────────────────────────────────────────────────────────────────
 @router.get("/api/flights")
 def get_flights():
-    """Live aircraft positions — OpenSky, cached 60 s, stale-while-revalidate."""
+    """Live aircraft positions — adsb.fi primary (has acType), OpenSky fallback."""
     global _flight_cache, _flight_cache_ts, _flight_backoff_ts
     now = time.time()
 
     if _flight_cache is not None and now - _flight_cache_ts < FLIGHT_CACHE_TTL:
         return _flight_cache
 
+    # Primary: adsb.fi — no auth, includes aircraft type codes
+    try:
+        adsb = _fetch_global_adsb()
+        if adsb:
+            result = {
+                "flights":   adsb,
+                "count":     len(adsb),
+                "source":    "adsb.fi",
+                "timestamp": datetime.now().isoformat(),
+            }
+            _flight_cache    = result
+            _flight_cache_ts = now
+            return result
+    except Exception as exc:
+        print(f"[flights] adsb.fi exception: {exc}")
+
+    # Fallback: OpenSky (no aircraft types, rate-limited)
     if now < _flight_backoff_ts:
         if _flight_cache is not None:
             return {**_flight_cache, "stale": True}
@@ -217,23 +234,6 @@ def get_flights():
                 return result
     except Exception as exc:
         print(f"[flights] opensky exception: {exc}")
-
-    # OpenSky failed/rate-limited — try adsb.fi (includes aircraft type)
-    print("[flights] falling back to adsb.fi")
-    try:
-        adsb = _fetch_global_adsb()
-        if adsb:
-            result = {
-                "flights":   adsb,
-                "count":     len(adsb),
-                "source":    "adsb.fi",
-                "timestamp": datetime.now().isoformat(),
-            }
-            _flight_cache    = result
-            _flight_cache_ts = now
-            return result
-    except Exception as exc:
-        print(f"[flights] adsb.fi exception: {exc}")
 
     _flight_backoff_ts = now + FLIGHT_BACKOFF
     if _flight_cache is not None:

@@ -54,22 +54,22 @@ const _SVG = {
 }
 
 const _SIZE = {
-  a380:   { iconSize: [52, 48], iconAnchor: [26, 24] },
-  b747:   { iconSize: [50, 46], iconAnchor: [25, 23] },
-  b777:   { iconSize: [48, 42], iconAnchor: [24, 21] },
-  b787:   { iconSize: [44, 40], iconAnchor: [22, 20] },
-  a350:   { iconSize: [44, 40], iconAnchor: [22, 20] },
-  a330:   { iconSize: [42, 38], iconAnchor: [21, 19] },
-  b767:   { iconSize: [40, 36], iconAnchor: [20, 18] },
-  b757:   { iconSize: [38, 28], iconAnchor: [19, 14] },
-  a321:   { iconSize: [36, 30], iconAnchor: [18, 15] },
-  b737:   { iconSize: [34, 30], iconAnchor: [17, 15] },
-  a320:   { iconSize: [32, 28], iconAnchor: [16, 14] },
-  a319:   { iconSize: [30, 26], iconAnchor: [15, 13] },
-  crj:    { iconSize: [28, 24], iconAnchor: [14, 12] },
-  atr:    { iconSize: [30, 28], iconAnchor: [15, 14] },
-  q400:   { iconSize: [30, 28], iconAnchor: [15, 14] },
-  bizjet: { iconSize: [26, 22], iconAnchor: [13, 11] },
+  a380:   { iconSize: [28, 26], iconAnchor: [14, 13] },
+  b747:   { iconSize: [26, 24], iconAnchor: [13, 12] },
+  b777:   { iconSize: [25, 22], iconAnchor: [13, 11] },
+  b787:   { iconSize: [23, 21], iconAnchor: [12, 11] },
+  a350:   { iconSize: [23, 21], iconAnchor: [12, 11] },
+  a330:   { iconSize: [22, 20], iconAnchor: [11, 10] },
+  b767:   { iconSize: [21, 19], iconAnchor: [11, 10] },
+  b757:   { iconSize: [20, 15], iconAnchor: [10,  8] },
+  a321:   { iconSize: [19, 16], iconAnchor: [10,  8] },
+  b737:   { iconSize: [18, 16], iconAnchor: [ 9,  8] },
+  a320:   { iconSize: [17, 15], iconAnchor: [ 9,  8] },
+  a319:   { iconSize: [16, 14], iconAnchor: [ 8,  7] },
+  crj:    { iconSize: [15, 13], iconAnchor: [ 8,  7] },
+  atr:    { iconSize: [16, 15], iconAnchor: [ 8,  8] },
+  q400:   { iconSize: [16, 15], iconAnchor: [ 8,  8] },
+  bizjet: { iconSize: [14, 12], iconAnchor: [ 7,  6] },
   default:{ iconSize: [20, 20], iconAnchor: [10, 10] },
 }
 
@@ -103,8 +103,10 @@ export function makePlaneIcon(heading, alt, category = 'default', callsign = '')
     } else {
       const [w, h] = _SIZE[cat].iconSize
       const box    = Math.max(w, h) + 4
+      // Override the SVG's hardcoded dimensions so it renders at our target size
+      const svg    = _SVG[cat].replace(/^<svg width="\d+" height="\d+"/, `<svg width="${w}" height="${h}"`)
       icon = L.divIcon({
-        html: `<div class="plane-marker"><span class="plane-icon plane-icon--svg" style="display:flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;--r:${svgDeg}deg;color:${col}">${_SVG[cat]}</span>${label}</div>`,
+        html: `<div class="plane-marker"><span class="plane-icon plane-icon--svg" style="display:flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;--r:${svgDeg}deg;color:${col}">${svg}</span>${label}</div>`,
         className:   '',
         iconSize:    [box, box],
         iconAnchor:  [box / 2, box / 2],
@@ -127,12 +129,27 @@ export function makeEmergencyIcon(heading, squawk) {
   })
 }
 
-export function makeSelectedIcon(heading) {
+export function makeSelectedIcon(heading, category = 'default') {
+  const hb  = Math.round((heading ?? 0) / 10) * 10
+  const cat = _SVG[category] ? category : 'default'
+  if (cat === 'default') {
+    return L.divIcon({
+      html: `<span class="plane-icon plane-icon--sel" style="--r:${hb - 90}deg">✈</span>`,
+      className: '',
+      iconSize:   [26, 26],
+      iconAnchor: [13, 13],
+    })
+  }
+  const [w, h] = _SIZE[cat].iconSize
+  const sw  = Math.round(w * 1.35)
+  const sh  = Math.round(h * 1.35)
+  const box = Math.max(sw, sh) + 8
+  const svg = _SVG[cat].replace(/^<svg width="\d+" height="\d+"/, `<svg width="${sw}" height="${sh}"`)
   return L.divIcon({
-    html: `<span class="plane-icon plane-icon--sel" style="--r:${(heading ?? 0) - 90}deg">✈</span>`,
+    html: `<span class="plane-icon--svg plane-icon--sel" style="display:flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;--r:${hb}deg;color:#fff;filter:drop-shadow(0 0 4px #38bdf8)">${svg}</span>`,
     className: '',
-    iconSize:   [26, 26],
-    iconAnchor: [13, 13],
+    iconSize:   [box, box],
+    iconAnchor: [box / 2, box / 2],
   })
 }
 
