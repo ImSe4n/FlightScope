@@ -2,30 +2,41 @@
 // Written by FlightDetail when acInfo loads; read by FlightLayer on every sync().
 const _cache = new Map()
 
-// Map ICAO type code to display category.
+// Map ICAO type code to one of 16 specific display categories.
 export function categorize(typeCode) {
   if (!typeCode) return 'default'
   const t = typeCode.toUpperCase()
 
-  // 4-engine heavies (A380, 747, AN-124, C-5, IL-76)
-  if (/^(A38[08]|B74[12458DS]|AN12[4]?|C5M|IL76)/.test(t)) return 'heavy4'
+  // ── 4-engine heavies ──────────────────────────────────────────────────────
+  if (/^A38[08]/.test(t)) return 'a380'
+  if (/^B74[12458DS]|^B74F/.test(t)) return 'b747'
+  if (/^(IL76|AN12[4]?|C5M)/.test(t)) return 'b747'
 
-  // Wide-body twins (777 classic+MAX, 787, A330 classic+neo, A340, A350, 767)
-  if (/^(B77[23LWFE89]|B78[789X]|A33[023489]|A34[23456]|A35[09KF]|B76[234]|MD1[01]|DC10|IL96)/.test(t)) return 'widebody'
+  // ── Wide-body twins ───────────────────────────────────────────────────────
+  if (/^B77[23LWFE89X]/.test(t)) return 'b777'
+  if (/^B78[789X]/.test(t)) return 'b787'
+  if (/^A35[09KF]/.test(t)) return 'a350'
+  if (/^A33[023489]|^A34[23456]/.test(t)) return 'a330'  // A330 + A340
+  if (/^B76[234]|^(MD1[01]|DC10|IL96)/.test(t)) return 'b767'
 
-  // Narrow-body (737 classic/NG/MAX, 757, A220, A319/320/321 classic+neo, MD-80/90, DC-9, 717)
-  if (/^(B73[5-9]|B3[789]M|B3XM|B757|B75[67]|A31[89]|A19N|A20N|A21N|A32[0-3]|A22[01]|MD[89][0-5]|DC9|B717)/.test(t)) return 'narrowbody'
+  // ── Narrow-body ───────────────────────────────────────────────────────────
+  if (/^A321|^A21N/.test(t)) return 'a321'               // before A320 match
+  if (/^B75[2367]/.test(t)) return 'b757'
+  if (/^B73[5-9]|^B3[789]M|^B3XM/.test(t)) return 'b737'
+  if (/^A320|^A32N/.test(t)) return 'a320'
+  if (/^A31[89]|^A19N|^A22[013]|^BCS[13]|^(MD[89][0-5]|DC9|B717)/.test(t)) return 'a319'
 
-  // Business jets (Gulfstream, Learjet, Falcon, Challenger, Citation, Global)
-  if (/^(GLF|LJ[34567]|FA[278X]|CL60|CL65|GLEX|GALX|H25[ABC]|E50P|C56[05X]|C68A|C750|PC24)/.test(t)) return 'bizjet'
+  // ── Business jets ─────────────────────────────────────────────────────────
+  if (/^(GLF[456]|LJ[34567]|FA[278X]|FA2T|CL60|CL65|GLEX|GALX|H25[ABC]|E50P|C5[26][05X]|C68A|C750|PC24|GL5T|GL7T)/.test(t)) return 'bizjet'
 
-  // Turboprops (ATR, Dash-8, King Air, Caravan, Saab 340, PC-12, Fokker 50)
-  if (/^(AT[47]|DH8[ABCD]?|PC12|C208|BE20|BEH|B190|SF3|F50)/.test(t)) return 'turboprop'
+  // ── Turboprops ────────────────────────────────────────────────────────────
+  if (/^AT[47][23567]/.test(t)) return 'atr'
+  if (/^DH8[ABCD]?|^DHC[46]|^PC12|^BE20|^BEH|^B190|^SF3|^F50|^Q4/.test(t)) return 'q400'
 
-  // Regional jets (CRJ, Embraer E-jets)
-  if (/^(CRJ|E1[45][05]|E17[05]|E19[05]|E27[05]|E4[45]|E75[SL]?)/.test(t)) return 'regional'
+  // ── Regional jets ─────────────────────────────────────────────────────────
+  if (/^CRJ[1279X]?|^E1[47][05]|^E19[05]|^E27[05]|^E75[SL]?|^ERJ/.test(t)) return 'crj'
 
-  return 'default'  // military, unknown, GA → ✈ emoji
+  return 'default'  // military, unknown, GA piston → ✈ emoji
 }
 
 export const getCachedType = icao24 => _cache.get(icao24?.toLowerCase()) ?? 'default'
