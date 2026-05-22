@@ -5,6 +5,7 @@ flight-related API routes.
 import math
 import os
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
@@ -98,10 +99,10 @@ def _opensky_clean(data: dict) -> list:
     ]
 
 
-def _fetch_adsb(url: str) -> list | None:
+def _fetch_adsb(url: str, timeout: int = 8) -> list | None:
     """Parse a readsb/tar1090 ADS-B JSON feed and normalise to our schema."""
     try:
-        r = requests.get(url, timeout=15, headers={"User-Agent": "FlightScope/1.0"})
+        r = requests.get(url, timeout=timeout, headers={"User-Agent": "FlightScope/1.0"})
         if not r.ok:
             print(f"[adsb] {url} -> HTTP {r.status_code}")
             return None
@@ -192,7 +193,7 @@ def _refresh_type_cache():
     tiles = [(51, -10), (40, -90)]
     new_map: dict[str, str] = {}
     for lat, lon in tiles:
-        batch = _fetch_adsb(f"https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/500")
+        batch = _fetch_adsb(f"https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/500", timeout=5)
         if batch:
             for f in batch:
                 if f["icao24"] and f.get("acType"):
@@ -214,11 +215,8 @@ def get_flights():
     if _flight_cache is not None and now - _flight_cache_ts < FLIGHT_CACHE_TTL:
         return _flight_cache
 
-    # Refresh type-code cache in background (non-blocking — uses cached value if fresh)
-    try:
-        _refresh_type_cache()
-    except Exception:
-        pass
+    # Kick off type-code refresh in the background — never blocks this request
+    threading.Thread(target=_refresh_type_cache, daemon=True).start()
 
     # Primary: OpenSky — large global dataset
     if now >= _flight_backoff_ts:
