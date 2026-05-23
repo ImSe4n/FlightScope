@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef, useMemo, useTransition, useCallback, memo, lazy, Suspense } from 'react'
 import { useFlights, useAirports, useTrack, useDrFlight } from './hooks/useFlights'
+import { useUserData } from './hooks/useUserData'
+import { useAppAuth }  from './context/AuthContext'
 import { airlineOf } from './utils/constants'
-import Header   from './components/Header'
-import Sidebar  from './components/Sidebar'
-import MapView  from './components/MapView'
-import AIChat   from './components/AIChat'
+import Header    from './components/Header'
+import Sidebar   from './components/Sidebar'
+import MapView   from './components/MapView'
+import AIChat    from './components/AIChat'
+import UserPanel from './components/UserPanel'
 import './App.css'
 
 const Globe3DModal = lazy(() => import('./components/Globe3DModal'))
