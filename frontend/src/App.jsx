@@ -295,6 +295,8 @@ export default function App() {
           showTrack={showTrack}
           onToggleTrack={handleToggleTrack}
           on3D={handle3D}
+          isSaved={selected ? userData.savedFlights.some(f => f.icao24 === selected.icao24?.toLowerCase()) : false}
+          onSaveFlight={selected ? () => handleSaveFlight(selected) : undefined}
         />
 
         <MapView
