@@ -210,7 +210,65 @@ def _refresh_type_cache():
         print(f"[types] {len(new_map)} type codes cached from airplanes.live")
 
 
+# ── Airport code matching (handles IATA ↔ ICAO conversion) ───────────────────
+def _airport_matches(cached_code: str | None, query: str) -> bool:
+    if not cached_code:
+        return False
+    c, q = cached_code.upper(), query.upper()
+    if c == q:
+        return True
+    # 3-letter IATA query vs 4-letter ICAO in cache ("LAX" matches "KLAX")
+    if len(q) == 3 and len(c) == 4 and c[1:] == q:
+        return True
+    # 4-letter ICAO query vs 3-letter IATA in cache ("KLAX" matches "LAX")
+    if len(q) == 4 and len(c) == 3 and q[1:] == c:
+        return True
+    return False
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
+@router.get("/api/route-search")
+def search_by_route(dep: str = "", arr: str = ""):
+    """Return icao24 codes of live flights on the given DEP→ARR route."""
+    from_code = dep.strip().upper()
+    to_code   = arr.strip().upper()
+    if not from_code or not to_code:
+        return {"icao24s": [], "from": from_code, "to": to_code}
+
+    cache = get_flight_cache()
+    if not cache:
+        return {"icao24s": [], "from": from_code, "to": to_code}
+
+    matching: list[str] = []
+    uncached: list[tuple[str, str]] = []   # (callsign, icao24)
+
+    for f in cache.get("flights", []):
+        cs = (f.get("callsign") or "").strip().upper()
+        if not cs:
+            continue
+        icao24 = f.get("icao24", "")
+        if cs in _route_cache:
+            c_dep, c_arr, _ = _route_cache[cs]
+            if _airport_matches(c_dep, from_code) and _airport_matches(c_arr, to_code):
+                matching.append(icao24)
+        else:
+            uncached.append((cs, icao24))
+
+    # Batch-lookup uncached callsigns (rate-limited; first call may take a few seconds)
+    if uncached:
+        batch   = uncached[:50]
+        cs_list = [cs for cs, _ in batch]
+        id_map  = {cs: icao24 for cs, icao24 in batch}
+        with ThreadPoolExecutor(max_workers=10) as ex:
+            results = list(ex.map(_lookup_route, cs_list))
+        for cs, rt in zip(cs_list, results):
+            if rt and _airport_matches(rt[0], from_code) and _airport_matches(rt[1], to_code):
+                matching.append(id_map[cs])
+
+    print(f"[route-search] {from_code}->{to_code}: {len(matching)} matches")
+    return {"icao24s": matching, "from": from_code, "to": to_code}
+
+
 @router.get("/api/flights")
 def get_flights():
     """Live aircraft positions — OpenSky primary, adsb.fi fallback."""
