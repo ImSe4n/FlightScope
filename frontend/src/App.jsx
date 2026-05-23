@@ -325,6 +325,25 @@ export default function App() {
       )}
 
       <AIChat flights={flights} selected={selected} />
+
+      <UserPanel
+        open={showUserPanel}
+        onClose={() => setShowUserPanel(false)}
+        savedFlights={userData.savedFlights}
+        savedAirports={userData.savedAirports}
+        savedRoutes={userData.savedRoutes}
+        settings={userData.settings}
+        unsaveFlight={userData.unsaveFlight}
+        unsaveAirport={userData.unsaveAirport}
+        unsaveRoute={userData.unsaveRoute}
+        saveSettings={userData.saveSettings}
+        onFlightSelect={handleSelect}
+        onAirportSelect={handleAirportSelect}
+        onRouteSelect={handleRouteSelect}
+        mapLayer={mapLayer}
+        filters={filters}
+        allFlights={flights}
+      />
     </div>
   )
 }
