@@ -228,6 +228,15 @@ export default function App() {
     setFlyTarget({ lat: a.lat, lon: a.lon, zoom: 13 })
   }, [])
 
+  const handleSaveFlight = useCallback((flight) => {
+    const isSaved = userData.savedFlights.some(f => f.icao24 === flight.icao24?.toLowerCase())
+    isSaved ? userData.unsaveFlight(flight.icao24) : userData.saveFlight(flight)
+  }, [userData])
+
+  const handleRouteSelect = useCallback(r => {
+    updateFilter('query', `${r.dep} ${r.arr}`)
+  }, [])
+
   const updateFilter = (key, value) =>
     startTransition(() => setFilters(prev => ({ ...prev, [key]: value })))
 
