@@ -15,9 +15,10 @@ function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, on
     return () => clearTimeout(id)
   }, [local])
 
-  const q    = local.trim().toLowerCase().replace(/\s+/g, '')
-  const qRaw = local.trim().toLowerCase()
+  const q        = local.trim().toLowerCase().replace(/\s+/g, '')
+  const qRaw     = local.trim().toLowerCase()
   const showDrop = open && q.length >= 2
+  const routeMatch = showDrop ? ROUTE_RE.exec(local.trim()) : null
 
   const matchAirports = useMemo(() => {
     if (!showDrop) return []
