@@ -303,6 +303,16 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
           <span className="fd-action-icon">↗</span>
           Share
         </button>
+        {onSave && (
+          <button
+            className={`fd-action${isSaved ? ' fd-action--active' : ''}`}
+            onClick={onSave}
+            title={isSaved ? 'Remove from saved flights' : 'Save this flight'}
+          >
+            <span className="fd-action-icon">{isSaved ? '★' : '☆'}</span>
+            {isSaved ? 'Saved' : 'Save'}
+          </button>
+        )}
       </div>
 
       {/* ── Route card — compact ICAO codes, click to fly to airport ───── */}
