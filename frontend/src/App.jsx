@@ -46,6 +46,19 @@ const MemoSidebar = memo(Sidebar, (prev, next) =>
 export default function App() {
   const { flights, error } = useFlights()
   const airports   = useAirports()
+  const { isAuthenticated, user } = useAppAuth()
+  const userData   = useUserData()
+  const [showUserPanel, setShowUserPanel] = useState(false)
+
+  // Apply saved cloud settings once on login
+  useEffect(() => {
+    if (!isAuthenticated || !userData.settings || !Object.keys(userData.settings).length) return
+    const s = userData.settings
+    if (s.mapLayer)  setMapLayer(s.mapLayer)
+    if (s.hideGround != null) updateFilter('hideGround', s.hideGround)
+    if (s.minAlt)    updateFilter('minAlt', s.minAlt)
+    if (s.maxAlt)    updateFilter('maxAlt', s.maxAlt)
+  }, [isAuthenticated, userData.settings])
 
   const [filters, setFilters] = useState(() => {
     try {
