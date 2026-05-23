@@ -1,9 +1,17 @@
 import { useState, useEffect, useMemo } from 'react'
 import { TILE_LAYERS } from '../utils/constants'
+import { useAppAuth }  from '../context/AuthContext'
+import AuthButton      from './AuthButton'
 
 const ROUTE_RE = /^([A-Z]{3,4})\s*[-→\s]+([A-Z]{3,4})$/i
 
-function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, onAirportSelect }) {
+function SearchBox({
+  query, onQueryChange,
+  flights, airports, onFlightSelect, onAirportSelect,
+  savedAirports, savedRoutes, onSaveAirport, onSaveRoute, onUnsaveAirport, onUnsaveRoute,
+  routeFilter,
+}) {
+  const { isAuthenticated } = useAppAuth()
   const [local, setLocal] = useState(query)
   const [open,  setOpen]  = useState(false)
 
@@ -42,6 +50,9 @@ function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, on
 
   const hasResults = matchAirports.length > 0 || matchFlights.length > 0
 
+  const isAirportSaved = (ident) => savedAirports?.some(a => a.ident === ident)
+  const isRouteSaved   = (dep, arr) => savedRoutes?.some(r => r.dep === dep && r.arr === arr)
+
   return (
     <div className="search-wrap">
       <span className="search-icon">⌕</span>
@@ -56,27 +67,63 @@ function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, on
       />
       {local && <button className="search-clear" onClick={clear}>✕</button>}
 
-      {showDrop && routeMatch && (
-        <div className="search-dropdown">
-          <div className="search-drop-item search-drop-route">
-            <span className="search-drop-code">{routeMatch[1].toUpperCase()} → {routeMatch[2].toUpperCase()}</span>
-            <span className="search-drop-name">Filtering live flights on this route…</span>
+      {showDrop && routeMatch && (() => {
+        const dep = routeMatch[1].toUpperCase()
+        const arr = routeMatch[2].toUpperCase()
+        const saved = isRouteSaved(dep, arr)
+        return (
+          <div className="search-dropdown">
+            <div className="search-drop-item search-drop-route">
+              <span className="search-drop-code">{dep} → {arr}</span>
+              <span className="search-drop-name">
+                {routeFilter?.loading ? 'Searching…' : 'Filtering live flights on this route'}
+              </span>
+              {isAuthenticated && (
+                <button
+                  className={`search-drop-star${saved ? ' saved' : ''}`}
+                  title={saved ? 'Remove saved route' : 'Save route'}
+                  onMouseDown={e => {
+                    e.preventDefault()
+                    saved ? onUnsaveRoute(dep, arr) : onSaveRoute(dep, arr)
+                  }}
+                >
+                  {saved ? '★' : '☆'}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {showDrop && !routeMatch && hasResults && (
         <div className="search-dropdown">
           {matchAirports.length > 0 && (
             <>
               <div className="search-drop-section">Airports</div>
-              {matchAirports.map(a => (
-                <div key={a.ident} className="search-drop-item" onMouseDown={() => { onAirportSelect(a); setOpen(false) }}>
-                  <span className="search-drop-code">{a.iata || a.ident}</span>
-                  <span className="search-drop-name">{a.name}</span>
-                  {a.city && <span className="search-drop-city">{a.city}{a.country ? ` · ${a.country}` : ''}</span>}
-                </div>
-              ))}
+              {matchAirports.map(a => {
+                const saved = isAirportSaved(a.ident)
+                return (
+                  <div key={a.ident} className="search-drop-item search-drop-item--airport">
+                    <div className="search-drop-item-info" onMouseDown={() => { onAirportSelect(a); setOpen(false) }}>
+                      <span className="search-drop-code">{a.iata || a.ident}</span>
+                      <span className="search-drop-name">{a.name}</span>
+                      {a.city && <span className="search-drop-city">{a.city}{a.country ? ` · ${a.country}` : ''}</span>}
+                    </div>
+                    {isAuthenticated && (
+                      <button
+                        className={`search-drop-star${saved ? ' saved' : ''}`}
+                        title={saved ? 'Remove saved airport' : 'Save airport'}
+                        onMouseDown={e => {
+                          e.preventDefault()
+                          saved ? onUnsaveAirport(a.ident) : onSaveAirport(a)
+                        }}
+                      >
+                        {saved ? '★' : '☆'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </>
           )}
           {matchFlights.length > 0 && (
@@ -102,6 +149,9 @@ export default function Header({
   stats, error,
   mapLayer, onLayerChange,
   flights, airports, onFlightSelect, onAirportSelect,
+  onOpenUserPanel,
+  savedAirports, savedRoutes, onSaveAirport, onSaveRoute, onUnsaveAirport, onUnsaveRoute,
+  routeFilter,
 }) {
   return (
     <header className="header">
@@ -126,6 +176,13 @@ export default function Header({
         airports={airports}
         onFlightSelect={onFlightSelect}
         onAirportSelect={onAirportSelect}
+        savedAirports={savedAirports}
+        savedRoutes={savedRoutes}
+        onSaveAirport={onSaveAirport}
+        onSaveRoute={onSaveRoute}
+        onUnsaveAirport={onUnsaveAirport}
+        onUnsaveRoute={onUnsaveRoute}
+        routeFilter={routeFilter}
       />
 
       <div className="header-right">
@@ -155,6 +212,10 @@ export default function Header({
             </button>
           ))}
         </div>
+
+        <div className="header-sep" />
+
+        <AuthButton onOpenPanel={onOpenUserPanel} />
       </div>
     </header>
   )
