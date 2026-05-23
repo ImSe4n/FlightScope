@@ -91,7 +91,7 @@ function fmtDur(ms) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
-export default function FlightDetail({ flight: f, onClose, airports, track, onAirportSelect, followMode, onToggleFollow, showTrack, onToggleTrack, on3D }) {
+export default function FlightDetail({ flight: f, onClose, airports, track, onAirportSelect, followMode, onToggleFollow, showTrack, onToggleTrack, on3D, isSaved, onSave }) {
   const sq        = String(f.squawk)
   const emergency = EMERGENCY_SQUAWKS[sq]
   const source    = SOURCE_TYPES[f.source] ?? 'Unknown'
