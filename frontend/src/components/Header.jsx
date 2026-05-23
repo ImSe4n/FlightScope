@@ -47,7 +47,7 @@ function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, on
       <span className="search-icon">⌕</span>
       <input
         className="search-input"
-        placeholder="Search flights, airports, callsigns…"
+        placeholder="Search flights, airports… or LAX JFK"
         value={local}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
@@ -56,7 +56,16 @@ function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, on
       />
       {local && <button className="search-clear" onClick={clear}>✕</button>}
 
-      {showDrop && hasResults && (
+      {showDrop && routeMatch && (
+        <div className="search-dropdown">
+          <div className="search-drop-item search-drop-route">
+            <span className="search-drop-code">{routeMatch[1].toUpperCase()} → {routeMatch[2].toUpperCase()}</span>
+            <span className="search-drop-name">Filtering live flights on this route…</span>
+          </div>
+        </div>
+      )}
+
+      {showDrop && !routeMatch && hasResults && (
         <div className="search-dropdown">
           {matchAirports.length > 0 && (
             <>

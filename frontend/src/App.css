@@ -169,6 +169,11 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 .search-drop-city {
   font-size: 10px; color: var(--txt-3); flex-shrink: 0;
 }
+.search-drop-route {
+  cursor: default; background: rgba(56,189,248,0.07);
+  border-left: 2px solid var(--accent);
+}
+.search-drop-route:hover { background: rgba(56,189,248,0.07); }
 
 /* Header right */
 .header-right {
