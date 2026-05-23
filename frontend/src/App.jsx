@@ -261,6 +261,14 @@ export default function App() {
         airports={airports}
         onFlightSelect={handleSelect}
         onAirportSelect={handleAirportSelect}
+        onOpenUserPanel={() => setShowUserPanel(true)}
+        savedAirports={userData.savedAirports}
+        savedRoutes={userData.savedRoutes}
+        onSaveAirport={userData.saveAirport}
+        onSaveRoute={userData.saveRoute}
+        onUnsaveAirport={userData.unsaveAirport}
+        onUnsaveRoute={userData.unsaveRoute}
+        routeFilter={routeFilter}
       />
 
       <div className="body">
