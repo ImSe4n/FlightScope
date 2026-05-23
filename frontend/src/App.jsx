@@ -50,16 +50,6 @@ export default function App() {
   const userData   = useUserData()
   const [showUserPanel, setShowUserPanel] = useState(false)
 
-  // Apply saved cloud settings once on login
-  useEffect(() => {
-    if (!isAuthenticated || !userData.settings || !Object.keys(userData.settings).length) return
-    const s = userData.settings
-    if (s.mapLayer)  setMapLayer(s.mapLayer)
-    if (s.hideGround != null) updateFilter('hideGround', s.hideGround)
-    if (s.minAlt)    updateFilter('minAlt', s.minAlt)
-    if (s.maxAlt)    updateFilter('maxAlt', s.maxAlt)
-  }, [isAuthenticated, userData.settings])
-
   const [filters, setFilters] = useState(() => {
     try {
       const s = localStorage.getItem('fs_filters')
@@ -73,6 +63,21 @@ export default function App() {
   const [followMode, setFollowMode] = useState(false)
   const [showTrack,  setShowTrack]  = useState(true)
   const [globe3D,    setGlobe3D]    = useState(null)  // { flight, fromIcao, toIcao }
+
+  // Apply saved cloud preferences once when user logs in
+  useEffect(() => {
+    if (!isAuthenticated || !userData.settings || !Object.keys(userData.settings).length) return
+    const s = userData.settings
+    if (s.mapLayer) setMapLayer(s.mapLayer)
+    setFilters(prev => ({
+      ...prev,
+      ...(s.hideGround != null ? { hideGround: s.hideGround } : {}),
+      ...(s.minAlt     ? { minAlt:     s.minAlt     } : {}),
+      ...(s.maxAlt     ? { maxAlt:     s.maxAlt     } : {}),
+      ...(s.minSpeed   ? { minSpeed:   s.minSpeed   } : {}),
+      ...(s.maxSpeed   ? { maxSpeed:   s.maxSpeed   } : {}),
+    }))
+  }, [isAuthenticated, userData.settings])
 
   // Persist filters (minus query) whenever they change
   useEffect(() => {
