@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { TILE_LAYERS } from '../utils/constants'
 
+const ROUTE_RE = /^([A-Z]{3,4})\s*[-→\s]+([A-Z]{3,4})$/i
+
 function SearchBox({ query, onQueryChange, flights, airports, onFlightSelect, onAirportSelect }) {
   const [local, setLocal] = useState(query)
   const [open,  setOpen]  = useState(false)

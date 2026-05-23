@@ -9,6 +9,8 @@ import './App.css'
 
 const Globe3DModal = lazy(() => import('./components/Globe3DModal'))
 
+const ROUTE_RE = /^([A-Z]{3,4})\s*[-→\s]+([A-Z]{3,4})$/i
+
 const DEFAULT_FILTERS = {
   query:         '',
   hideGround:    false,
@@ -80,6 +82,35 @@ export default function App() {
     window.history.replaceState(null, '', url.toString())
   }, [selected])
 
+  const [routeFilter, setRouteFilter] = useState(null)
+  const routeAbortRef = useRef(null)
+
+  // Detect route pattern in query and fetch matching icao24s
+  useEffect(() => {
+    const m = ROUTE_RE.exec(filters.query.trim())
+    if (!m) {
+      setRouteFilter(null)
+      routeAbortRef.current?.abort()
+      return
+    }
+    const dep = m[1].toUpperCase()
+    const arr = m[2].toUpperCase()
+    routeAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    routeAbortRef.current = ctrl
+    setRouteFilter({ dep, arr, icao24s: null, loading: true })
+    fetch(`/api/route-search?dep=${dep}&arr=${arr}`, { signal: ctrl.signal })
+      .then(r => r.json())
+      .then(data => {
+        if (!ctrl.signal.aborted)
+          setRouteFilter({ dep, arr, icao24s: new Set(data.icao24s), loading: false })
+      })
+      .catch(e => {
+        if (e.name !== 'AbortError')
+          setRouteFilter({ dep, arr, icao24s: new Set(), loading: false })
+      })
+  }, [filters.query])
+
   const [, startTransition] = useTransition()
 
   const { track } = useTrack(selected?.icao24)
@@ -123,7 +154,9 @@ export default function App() {
     if (filters.maxAlt !== '') r = r.filter(f => f.alt   != null && f.alt   <= Number(filters.maxAlt))
     if (filters.minSpeed !== '') r = r.filter(f => f.speed != null && f.speed >= Number(filters.minSpeed))
     if (filters.maxSpeed !== '') r = r.filter(f => f.speed != null && f.speed <= Number(filters.maxSpeed))
-    if (filters.query.trim()) {
+    if (routeFilter?.icao24s) {
+      r = r.filter(f => routeFilter.icao24s.has(f.icao24))
+    } else if (!routeFilter && filters.query.trim()) {
       const q = filters.query.trim().toLowerCase().replace(/\s+/g, '')
       r = r.filter(f =>
         f.callsign?.trim().toLowerCase().replace(/\s+/g, '').includes(q) ||
@@ -133,7 +166,7 @@ export default function App() {
       )
     }
     return r
-  }, [flights, filters])
+  }, [flights, filters, routeFilter])
 
   const emergencies = useMemo(
     () => flights.filter(f => ['7500','7600','7700'].includes(String(f.squawk))),
