@@ -36,6 +36,8 @@ export default function Sidebar({
             showTrack={showTrack}
             onToggleTrack={onToggleTrack}
             on3D={on3D}
+            isSaved={isSaved}
+            onSave={onSaveFlight}
           />
         </div>
       ) : (
