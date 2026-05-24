@@ -201,6 +201,10 @@ export default function Header({
 
         <div className="header-sep" />
 
+        <LiveClock />
+
+        <div className="header-sep" />
+
         <div className="layer-switcher">
           {Object.entries(TILE_LAYERS).map(([key, layer]) => (
             <button
