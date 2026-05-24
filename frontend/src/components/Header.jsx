@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { TILE_LAYERS } from '../utils/constants'
 import { useAppAuth }  from '../context/AuthContext'
 import AuthButton      from './AuthButton'
