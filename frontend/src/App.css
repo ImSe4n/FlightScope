@@ -195,6 +195,23 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 .stat-val   { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat-label { font-size: 9px; color: var(--txt-3); text-transform: uppercase; letter-spacing: 0.08em; }
 
+/* Live clock */
+.live-clock {
+  display: flex; flex-direction: column;
+  align-items: center; line-height: 1.15;
+  flex-shrink: 0;
+}
+.live-clock-time {
+  font-size: 14px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--mono); color: var(--txt);
+  letter-spacing: 0.04em;
+}
+.live-clock-label {
+  font-size: 9px; color: var(--txt-3);
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+
 .badge-err {
   background: rgba(248, 113, 113, 0.12);
   border: 1px solid rgba(248, 113, 113, 0.3);
