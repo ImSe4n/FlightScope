@@ -221,6 +221,21 @@ export default function Header({
   )
 }
 
+function LiveClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const utc = now.toISOString().slice(11, 19)
+  return (
+    <div className="live-clock">
+      <div className="live-clock-time">{utc}</div>
+      <div className="live-clock-label">UTC</div>
+    </div>
+  )
+}
+
 function StatChip({ value, label, color, blink = false }) {
   return (
     <div className={`stat-chip${blink ? ' stat-chip--blink' : ''}`}>
