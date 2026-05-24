@@ -58,7 +58,7 @@ function SearchBox({
       <span className="search-icon">⌕</span>
       <input
         className="search-input"
-        placeholder="Search flights, airports… or LAX JFK"
+        placeholder="Search flights, airports… or LAX-JFK"
         value={local}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
