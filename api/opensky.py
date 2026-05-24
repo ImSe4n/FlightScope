@@ -340,17 +340,21 @@ def get_flights():
 
 
 _track_cache: dict = {}   # icao24 -> (result, timestamp)
-_TRACK_CACHE_TTL = 120    # 2 minutes — tracks don't change fast
+_TRACK_CACHE_TTL = 300    # 5 minutes — tracks change slowly; longer TTL reduces OpenSky pressure
 
 
 @router.get("/api/track/{icao24}")
 def get_track(icao24: str):
     icao = icao24.lower()
     now  = time.time()
+
+    # Return fresh cache immediately
     if icao in _track_cache:
         cached, ts = _track_cache[icao]
         if now - ts < _TRACK_CACHE_TTL:
             return cached
+
+    # Try to refresh from OpenSky
     try:
         r = requests.get(
             f"https://opensky-network.org/api/tracks/all?icao24={icao}&time=0",
@@ -361,6 +365,11 @@ def get_track(icao24: str):
             return result
     except Exception:
         pass
+
+    # Refresh failed — serve stale cache rather than an empty path
+    if icao in _track_cache:
+        return _track_cache[icao][0]
+
     return {"icao24": icao24, "path": []}
 
 
