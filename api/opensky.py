@@ -382,41 +382,58 @@ def get_aircraft_info(icao24: str):
         return {}
 
 
+_route_ep_cache: dict = {}   # callsign -> (result_dict, timestamp)
+_ROUTE_EP_TTL_HIT  = 86_400  # 24 h for found routes (routes rarely change)
+_ROUTE_EP_TTL_MISS = 3_600   # 1 h for not-found (retry later)
+
+
 @router.get("/api/route/{callsign}")
 def get_route(callsign: str):
     cs = callsign.strip().upper()
+    now = time.time()
+
+    # Return cached result (hit or known miss) before hitting any external API
+    if cs in _route_ep_cache:
+        cached, ts = _route_ep_cache[cs]
+        ttl = _ROUTE_EP_TTL_HIT if cached else _ROUTE_EP_TTL_MISS
+        if now - ts < ttl:
+            return cached
+
+    result: dict = {}
 
     # 1. OpenSky scheduled-route database
     try:
         r = requests.get(
             f"https://opensky-network.org/api/routes?callsign={cs}",
-            timeout=8, headers=opensky.headers())
+            timeout=6, headers=opensky.headers())
         if r.ok:
             d = r.json()
             if d.get("route") and len(d["route"]) >= 2:
-                return d
+                result = d
     except Exception:
         pass
 
-    # 2. adsbdb.com fallback — free, good scheduled-route coverage
-    try:
-        r = requests.get(
-            f"https://api.adsbdb.com/v0/callsign/{cs}",
-            timeout=8, headers={"User-Agent": "FlightScope/1.0"})
-        if r.ok:
-            fr  = r.json().get("response", {}).get("flightroute") or {}
-            dep = (fr.get("origin")      or {}).get("icao_code")
-            arr = (fr.get("destination") or {}).get("icao_code")
-            if dep and arr:
-                return {
-                    "callsign":    cs,
-                    "route":       [dep, arr],
-                    "operatorCode": (fr.get("airline") or {}).get("icao"),
-                }
-    except Exception:
-        pass
+    # 2. adsbdb.com fallback
+    if not result:
+        try:
+            r = requests.get(
+                f"https://api.adsbdb.com/v0/callsign/{cs}",
+                timeout=6, headers={"User-Agent": "FlightScope/1.0"})
+            if r.ok:
+                fr  = r.json().get("response", {}).get("flightroute") or {}
+                dep = (fr.get("origin")      or {}).get("icao_code")
+                arr = (fr.get("destination") or {}).get("icao_code")
+                if dep and arr:
+                    result = {
+                        "callsign":     cs,
+                        "route":        [dep, arr],
+                        "operatorCode": (fr.get("airline") or {}).get("icao"),
+                    }
+        except Exception:
+            pass
 
-    return {}
+    _route_ep_cache[cs] = (result, now)
+    return result
 
 
 _history_cache: dict = {}   # icao24 -> (result, timestamp)
