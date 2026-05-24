@@ -17,7 +17,7 @@ export const useAppAuth = () => useContext(AuthContext)
 export function Auth0Bridge({ children }) {
   const {
     isAuthenticated, isLoading, user,
-    loginWithPopup, logout,
+    loginWithRedirect, logout,
     getAccessTokenSilently,
   } = useAuth0()
 
@@ -26,7 +26,7 @@ export function Auth0Bridge({ children }) {
       isAuthenticated,
       isLoading,
       user,
-      login:    loginWithPopup,
+      login:    () => loginWithRedirect({ authorizationParams: { redirect_uri: window.location.origin } }),
       logout:   (opts) => logout({ logoutParams: { returnTo: window.location.origin, ...opts } }),
       getToken: getAccessTokenSilently,
     }}>
