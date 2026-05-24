@@ -211,16 +211,44 @@ def _refresh_type_cache():
 
 
 # ── Airport code matching (handles IATA ↔ ICAO conversion) ───────────────────
+# IATA→ICAO map built lazily from OurAirports data.  Import is deferred inside
+# the helper to avoid the circular dependency (airports.py imports opensky.py).
+_iata_to_icao: dict[str, str] = {}
+_airport_map_ready = False
+
+
+def _ensure_airport_map():
+    global _iata_to_icao, _airport_map_ready
+    if _airport_map_ready:
+        return
+    try:
+        from api.airports import _airports_get  # noqa: PLC0415 — deferred on purpose
+        df = _airports_get()
+        if df is not None:
+            for _, row in df.iterrows():
+                ident = str(row.get("ident", "")).strip().upper()
+                iata  = str(row.get("iata_code", "")).strip().upper()
+                if ident and iata and iata != "NAN":
+                    _iata_to_icao[iata] = ident
+        _airport_map_ready = True
+    except Exception as exc:
+        print(f"[airport-map] failed to build: {exc}")
+
+
 def _airport_matches(cached_code: str | None, query: str) -> bool:
+    """Return True if cached_code (ICAO) matches query (IATA or ICAO)."""
     if not cached_code:
         return False
     c, q = cached_code.upper(), query.upper()
     if c == q:
         return True
-    # 3-letter IATA query vs 4-letter ICAO in cache ("LAX" matches "KLAX")
+    _ensure_airport_map()
+    # Exact IATA→ICAO match (e.g. "LHR" → "EGLL", "LAX" → "KLAX")
+    if q in _iata_to_icao and _iata_to_icao[q] == c:
+        return True
+    # Fallback K-prefix heuristic for airports absent from dataset
     if len(q) == 3 and len(c) == 4 and c[1:] == q:
         return True
-    # 4-letter ICAO query vs 3-letter IATA in cache ("KLAX" matches "LAX")
     if len(q) == 4 and len(c) == 3 and q[1:] == c:
         return True
     return False
