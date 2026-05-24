@@ -1,6 +1,16 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { REFRESH_MS } from '../utils/constants'
 
+// Module-level caches — survive component unmount/remount so re-clicking the
+// same flight is instant instead of re-fetching on every open.
+const _routeCache   = new Map()  // callsign -> { data, ts }
+const _historyCache = new Map()  // icao24   -> { data, ts }
+const _acInfoCache  = new Map()  // icao24   -> data (no expiry — registration is static)
+const _statusCache  = new Map()  // callsign -> { data, ts }
+const _ROUTE_MS   = 86_400_000   // 24 h
+const _HISTORY_MS =    300_000   // 5 min (matches backend TTL)
+const _STATUS_MS  =    120_000   // 2 min
+
 export function useFlights() {
   const [flights, setFlights]     = useState([])
   const [loading, setLoading]     = useState(false)
