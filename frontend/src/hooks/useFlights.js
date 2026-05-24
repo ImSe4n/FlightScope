@@ -232,9 +232,15 @@ export function useFlightHistory(icao24) {
 
   useEffect(() => {
     if (!icao24) { setHistory(null); return }
+    const hit = _historyCache.get(icao24)
+    if (hit && Date.now() - hit.ts < _HISTORY_MS) { setHistory(hit.data); return }
     fetch(`/api/flight-history/${icao24}`)
       .then(r => r.json())
-      .then(d => setHistory(d?.latest ? d : null))
+      .then(d => {
+        const data = d?.latest ? d : null
+        _historyCache.set(icao24, { data, ts: Date.now() })
+        setHistory(data)
+      })
       .catch(() => setHistory(null))
   }, [icao24])
 
