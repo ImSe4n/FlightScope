@@ -142,21 +142,36 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
     return nearest?.ident ?? null
   }, [track, airports])
 
-  // Sanity-check the callsign route DB: if its stated departure disagrees with what we
-  // observed in the track, that DB entry is for a different route — discard its destination too.
-  const routeDepCode    = route?.route?.[0]
-  const trackDepAirport = trackDep ? airports.find(a => a.ident === trackDep) : null
-  const routeMatchesDep = !trackDep || !routeDepCode ||
-    routeDepCode === trackDep ||
-    (trackDepAirport?.iata && routeDepCode === trackDepAirport.iata)
+  // Actual dep/arr from OpenSky flight records — specific to this flight, not just the callsign schedule
+  const latest  = history?.latest
+  const histDep = latest?.estDepartureAirport || null
+  const histArr = latest?.estArrivalAirport   || null
 
-  const latest   = history?.latest
+  // Sanity-check the callsign route DB against actual track or history observations.
+  // Only trust the route DB when we can verify it; "!trackDep" alone is NOT enough
+  // because it makes routeMatchesDep trivially true and shows wrong airports.
+  const routeDepCode    = route?.route?.[0]
+  const routeArrCode    = route?.route?.[route.route.length - 1]
+  const trackDepAirport = trackDep ? airports.find(a => a.ident === trackDep) : null
+  const histDepAirport  = histDep  ? airports.find(a => a.ident === histDep || a.iata === histDep) : null
+
+  // Route DB is accepted only when track OR history confirms the departure airport
+  const routeMatchesDep = (trackDep || histDep) && routeDepCode && (
+    routeDepCode === trackDep ||
+    (trackDepAirport?.iata && routeDepCode === trackDepAirport.iata) ||
+    routeDepCode === histDep ||
+    (histDepAirport?.iata && routeDepCode === histDepAirport.iata) ||
+    (histDepAirport?.ident && routeDepCode === histDepAirport.ident)
+  )
+
   const fromIcao = flightStatus?.departure?.airport
     ?? trackDep
+    ?? histDep
     ?? (routeMatchesDep ? routeDepCode : null)
     ?? null
   const toIcao   = flightStatus?.arrival?.airport
-    ?? (routeMatchesDep ? route?.route?.[route.route.length - 1] : null)
+    ?? histArr
+    ?? (routeMatchesDep ? routeArrCode : null)
     ?? null
 
   const depTerminal = flightStatus?.departure?.terminal
