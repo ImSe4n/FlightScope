@@ -149,9 +149,14 @@ export function useAircraftInfo(icao24) {
 
   useEffect(() => {
     if (!icao24) { setInfo(null); return }
+    if (_acInfoCache.has(icao24)) { setInfo(_acInfoCache.get(icao24)); return }
     fetch(`/api/aircraft/${icao24}`)
       .then(r => r.json())
-      .then(d => setInfo(d && Object.keys(d).length > 0 ? d : null))
+      .then(d => {
+        const v = d && Object.keys(d).length > 0 ? d : null
+        _acInfoCache.set(icao24, v)
+        setInfo(v)
+      })
       .catch(() => setInfo(null))
   }, [icao24])
 
@@ -165,9 +170,15 @@ export function useRoute(callsign) {
   useEffect(() => {
     const cs = callsign?.trim()
     if (!cs) { setRoute(null); return }
+    const hit = _routeCache.get(cs)
+    if (hit && Date.now() - hit.ts < _ROUTE_MS) { setRoute(hit.data); return }
     fetch(`/api/route/${cs}`)
       .then(r => r.json())
-      .then(d => setRoute(d && d.route?.length >= 2 ? d : null))
+      .then(d => {
+        const data = d && d.route?.length >= 2 ? d : null
+        _routeCache.set(cs, { data, ts: Date.now() })
+        setRoute(data)
+      })
       .catch(() => setRoute(null))
   }, [callsign])
 
@@ -181,9 +192,15 @@ export function useFlightStatus(callsign) {
   useEffect(() => {
     const cs = callsign?.trim()
     if (!cs) { setStatus(null); return }
+    const hit = _statusCache.get(cs)
+    if (hit && Date.now() - hit.ts < _STATUS_MS) { setStatus(hit.data); return }
     fetch(`/api/flight-status/${cs}`)
       .then(r => r.json())
-      .then(d => setStatus(d && !d.error && Object.keys(d).length > 0 ? d : null))
+      .then(d => {
+        const data = d && !d.error && Object.keys(d).length > 0 ? d : null
+        _statusCache.set(cs, { data, ts: Date.now() })
+        setStatus(data)
+      })
       .catch(() => setStatus(null))
   }, [callsign])
 
