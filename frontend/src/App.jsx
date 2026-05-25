@@ -236,7 +236,7 @@ export default function App() {
   }, [userData])
 
   const handleRouteSelect = useCallback(r => {
-    updateFilter('query', `${r.dep} ${r.arr}`)
+    updateFilter('query', `${r.dep}-${r.arr}`)
   }, [])
 
   const updateFilter = (key, value) =>
