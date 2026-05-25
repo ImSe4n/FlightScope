@@ -11,7 +11,7 @@ export default function Sidebar({
   countries, airlines, emergencies,
   airports, track, onAirportSelect,
   followMode, onToggleFollow, showTrack, onToggleTrack, on3D,
-  isSaved, onSaveFlight,
+  isSaved, onSaveFlight, routeFilter,
 }) {
   const [tab, setTab] = useState(() => localStorage.getItem('fs_sidebarTab') || 'flights')
   const switchTab = t => { setTab(t); localStorage.setItem('fs_sidebarTab', t) }
