@@ -254,6 +254,26 @@ export default function App() {
     updateFilter('query', `${r.dep}-${r.arr}`)
   }, [])
 
+  const handleSaveAirport = useCallback((airport) => {
+    userData.saveAirport(airport)
+    addToast(`Saved ${airport.iata || airport.ident}`)
+  }, [userData, addToast])
+
+  const handleUnsaveAirport = useCallback((ident) => {
+    userData.unsaveAirport(ident)
+    addToast('Airport removed', 'info')
+  }, [userData, addToast])
+
+  const handleSaveRoute = useCallback((dep, arr) => {
+    userData.saveRoute(dep, arr)
+    addToast(`Saved route ${dep}–${arr}`)
+  }, [userData, addToast])
+
+  const handleUnsaveRoute = useCallback((dep, arr) => {
+    userData.unsaveRoute(dep, arr)
+    addToast('Route removed', 'info')
+  }, [userData, addToast])
+
   const updateFilter = (key, value) =>
     startTransition(() => setFilters(prev => ({ ...prev, [key]: value })))
 
