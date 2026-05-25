@@ -364,6 +364,7 @@ export default function App() {
       )}
 
       <AIChat flights={flights} selected={selected} />
+      <ToastList toasts={toasts} />
 
       <UserPanel
         open={showUserPanel}
