@@ -106,6 +106,13 @@ export default function App() {
     window.history.replaceState(null, '', url.toString())
   }, [selected])
 
+  const [toasts, setToasts] = useState([])
+  const addToast = useCallback((msg, type = 'success') => {
+    const id = Date.now() + Math.random()
+    setToasts(prev => [...prev.slice(-2), { id, msg, type }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3200)
+  }, [])
+
   const [routeFilter, setRouteFilter] = useState(null)
   const routeAbortRef = useRef(null)
 
