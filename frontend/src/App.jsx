@@ -8,6 +8,7 @@ import Sidebar   from './components/Sidebar'
 import MapView   from './components/MapView'
 import AIChat    from './components/AIChat'
 import UserPanel from './components/UserPanel'
+import ToastList from './components/Toast'
 import './App.css'
 
 const Globe3DModal = lazy(() => import('./components/Globe3DModal'))
