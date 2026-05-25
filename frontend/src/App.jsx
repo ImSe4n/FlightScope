@@ -339,6 +339,7 @@ export default function App() {
           on3D={handle3D}
           isSaved={selected ? userData.savedFlights.some(f => f.icao24 === selected.icao24?.toLowerCase()) : false}
           onSaveFlight={selected ? () => handleSaveFlight(selected) : undefined}
+          routeFilter={routeFilter}
         />
 
         <MapView
