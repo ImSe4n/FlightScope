@@ -10,7 +10,7 @@ function vrArrow(vr) {
   return vr > 0 ? { char: '↑', color: 'var(--green)' } : { char: '↓', color: 'var(--red)' }
 }
 
-export default function FlightList({ flights, total, selected, onSelect }) {
+export default function FlightList({ flights, total, selected, onSelect, routeFilter }) {
   const [sortBy, setSortBy] = useState('alt')
 
   const sorted = useMemo(() => {
