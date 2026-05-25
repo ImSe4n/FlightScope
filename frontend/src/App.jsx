@@ -301,10 +301,10 @@ export default function App() {
         onOpenUserPanel={() => setShowUserPanel(true)}
         savedAirports={userData.savedAirports}
         savedRoutes={userData.savedRoutes}
-        onSaveAirport={userData.saveAirport}
-        onSaveRoute={userData.saveRoute}
-        onUnsaveAirport={userData.unsaveAirport}
-        onUnsaveRoute={userData.unsaveRoute}
+        onSaveAirport={handleSaveAirport}
+        onSaveRoute={handleSaveRoute}
+        onUnsaveAirport={handleUnsaveAirport}
+        onUnsaveRoute={handleUnsaveRoute}
         routeFilter={routeFilter}
       />
 
