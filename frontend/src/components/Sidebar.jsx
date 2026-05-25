@@ -71,6 +71,7 @@ export default function Sidebar({
                 total={totalFlights}
                 selected={selected}
                 onSelect={onSelect}
+                routeFilter={routeFilter}
               />
             ) : (
               <FilterPanel
