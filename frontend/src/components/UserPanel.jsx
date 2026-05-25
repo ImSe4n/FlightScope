@@ -22,8 +22,8 @@ export default function UserPanel({
 
   if (!open) return null
 
-  const handleSavePrefs = () => {
-    saveSettings({
+  const handleSavePrefs = async () => {
+    await saveSettings({
       mapLayer,
       hideGround: filters.hideGround,
       minAlt:     filters.minAlt,
