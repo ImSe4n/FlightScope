@@ -156,9 +156,15 @@ export default function App() {
     if (fresh) setSelected(fresh)
   }, [flights])
 
-  // Escape key → deselect + cancel follow
+  // Keyboard shortcuts
   useEffect(() => {
-    const h = e => { if (e.key === 'Escape') { setSelected(null); setFollowMode(false) } }
+    const h = e => {
+      // Ignore when typing in an input / textarea
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.key === 'Escape') { setSelected(null); setFollowMode(false) }
+      if (e.key === 'f' || e.key === 'F') setFollowMode(v => !v)
+      if (e.key === 't' || e.key === 'T') setShowTrack(v => !v)
+    }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
   }, [])
