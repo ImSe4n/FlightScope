@@ -521,7 +521,8 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 .fl-alt--gnd { color: var(--txt-3); }
 
 .fl-more  { padding: 12px 14px; color: var(--txt-3); font-size: 11px; text-align: center; font-style: italic; }
-.fl-empty { padding: 28px 14px; color: var(--txt-3); font-size: 12px; text-align: center; }
+.fl-empty { padding: 28px 14px; color: var(--txt-3); font-size: 12px; text-align: center; display: flex; flex-direction: column; gap: 6px; }
+.fl-empty-hint { font-size: 10px; color: var(--txt-3); opacity: 0.7; }
 
 /* ── Flight Detail ───────────────────────────────────────────────────────── */
 .flight-detail {
