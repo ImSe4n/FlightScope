@@ -239,9 +239,16 @@ export default function App() {
   }, [])
 
   const handleSaveFlight = useCallback((flight) => {
+    const cs = flight.callsign?.trim() || flight.icao24?.toUpperCase()
     const isSaved = userData.savedFlights.some(f => f.icao24 === flight.icao24?.toLowerCase())
-    isSaved ? userData.unsaveFlight(flight.icao24) : userData.saveFlight(flight)
-  }, [userData])
+    if (isSaved) {
+      userData.unsaveFlight(flight.icao24)
+      addToast(`Removed ${cs} from saved flights`)
+    } else {
+      userData.saveFlight(flight)
+      addToast(`Saved ${cs}`)
+    }
+  }, [userData, addToast])
 
   const handleRouteSelect = useCallback(r => {
     updateFilter('query', `${r.dep}-${r.arr}`)
