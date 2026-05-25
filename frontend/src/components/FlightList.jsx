@@ -74,9 +74,16 @@ export default function FlightList({ flights, total, selected, onSelect, routeFi
           </div>
         )}
 
-        {flights.length === 0 && total > 0 && (
-          <div className="fl-empty">No flights match current filters.</div>
-        )}
+        {flights.length === 0 && total > 0 && (() => {
+          if (routeFilter?.loading) return <div className="fl-empty">Searching route…</div>
+          if (routeFilter?.icao24s?.size === 0) return (
+            <div className="fl-empty">
+              No live flights found on {routeFilter.dep}–{routeFilter.arr}.
+              <span className="fl-empty-hint">Route may have no current traffic, or callsign data isn't available yet.</span>
+            </div>
+          )
+          return <div className="fl-empty">No flights match current filters.</div>
+        })()}
 
         {total === 0 && (
           <div className="fl-empty">Waiting for flight data…</div>
