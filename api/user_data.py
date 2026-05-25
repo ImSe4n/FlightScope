@@ -139,7 +139,12 @@ def get_settings(user: dict = Depends(verify_token)):
     uid = user["sub"]
     with _db() as c:
         row = c.execute("SELECT settings_json FROM user_settings WHERE user_id=?", (uid,)).fetchone()
-    return json.loads(row["settings_json"]) if row else {}
+    if not row:
+        return {}
+    try:
+        return json.loads(row["settings_json"])
+    except Exception:
+        return {}
 
 class SettingsIn(BaseModel):
     settings: dict
