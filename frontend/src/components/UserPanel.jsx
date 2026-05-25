@@ -145,7 +145,7 @@ function TabAirports({ saved, onSelect, onRemove }) {
 
 function TabRoutes({ saved, onSelect, onRemove }) {
   if (!saved.length) {
-    return <Empty>No saved routes yet. Search "LAX JFK" and click <strong>☆ Save Route</strong>.</Empty>
+    return <Empty>No saved routes yet. Search "LAX-JFK" and click <strong>☆ Save Route</strong>.</Empty>
   }
   return (
     <ul className="ulist">
