@@ -43,7 +43,8 @@ const MemoSidebar = memo(Sidebar, (prev, next) =>
   prev.showTrack        === next.showTrack        &&
   prev.onAirportSelect  === next.onAirportSelect  &&
   prev.isSaved          === next.isSaved          &&
-  prev.onSaveFlight     === next.onSaveFlight
+  prev.onSaveFlight     === next.onSaveFlight     &&
+  prev.routeFilter      === next.routeFilter
 )
 
 export default function App() {
