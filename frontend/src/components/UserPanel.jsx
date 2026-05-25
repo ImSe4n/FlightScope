@@ -163,7 +163,26 @@ function TabRoutes({ saved, onSelect, onRemove }) {
 }
 
 function TabSettings({ settings, mapLayer, filters, onSave }) {
+  const [saveState, setSaveState] = useState('idle')  // idle | saving | saved | error
   const hasCloud = settings && Object.keys(settings).length > 0
+
+  const handleSave = useCallback(async () => {
+    setSaveState('saving')
+    try {
+      await onSave()
+      setSaveState('saved')
+      setTimeout(() => setSaveState('idle'), 2500)
+    } catch {
+      setSaveState('error')
+      setTimeout(() => setSaveState('idle'), 2500)
+    }
+  }, [onSave])
+
+  const btnLabel = saveState === 'saving' ? 'Saving…'
+    : saveState === 'saved'  ? '✓ Saved!'
+    : saveState === 'error'  ? '✗ Save failed'
+    : '↑ Save current preferences to cloud'
+
   return (
     <div className="usettings">
       <div className="usettings-section">Current session</div>
@@ -174,8 +193,12 @@ function TabSettings({ settings, mapLayer, filters, onSave }) {
       {filters.minSpeed && <Row label="Min speed"    val={`${filters.minSpeed} m/s`} />}
       {filters.maxSpeed && <Row label="Max speed"    val={`${filters.maxSpeed} m/s`} />}
 
-      <button className="usettings-save" onClick={onSave}>
-        ↑ Save current preferences to cloud
+      <button
+        className={`usettings-save${saveState === 'saved' ? ' usettings-save--ok' : saveState === 'error' ? ' usettings-save--err' : ''}`}
+        onClick={handleSave}
+        disabled={saveState === 'saving'}
+      >
+        {btnLabel}
       </button>
 
       {hasCloud && (
