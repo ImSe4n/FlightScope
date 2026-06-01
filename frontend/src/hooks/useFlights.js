@@ -9,7 +9,7 @@ const _acInfoCache  = new Map()  // icao24   -> data (no expiry — registration
 const _statusCache  = new Map()  // callsign -> { data, ts }
 const _ROUTE_MS   = 86_400_000   // 24 h
 const _HISTORY_MS =    300_000   // 5 min (matches backend TTL)
-const _STATUS_MS  =    120_000   // 2 min
+const _STATUS_MS  =    600_000   // 10 min — matches AeroAPI backend TTL to avoid wasting credits
 
 export function useFlights() {
   const [flights, setFlights]     = useState([])
