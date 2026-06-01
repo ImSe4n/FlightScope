@@ -1161,7 +1161,7 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
   border-radius: var(--r-sm);
 }
 .apf-row {
-  display: grid; grid-template-columns: 80px 1fr 58px auto;
+  display: grid; grid-template-columns: 72px 1fr 52px auto auto;
   gap: 4px; align-items: center;
   padding: 5px 8px;
   border-bottom: 1px solid var(--border);
