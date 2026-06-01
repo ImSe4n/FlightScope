@@ -12,7 +12,13 @@ from datetime import datetime, timedelta
 import pandas as pd
 import requests
 from fastapi import APIRouter
-from api.aeroapi import get_flight as _aero_flight, format_route as _aero_route, format_status as _aero_status, configured as _aero_configured
+from api.aeroapi import (
+    get_flight as _aero_flight,
+    format_route as _aero_route,
+    format_status as _aero_status,
+    configured as _aero_configured,
+    get_airport_flights as _aero_airport_flights,
+)
 
 router = APIRouter()
 
