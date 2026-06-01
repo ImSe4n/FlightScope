@@ -157,11 +157,19 @@ function AirportInfoTab({ a, loading }) {
 }
 
 // ── Status badge for airport flight rows ─────────────────────────────────────
-function ApfBadge({ status }) {
-  if (!status) return null
-  if (status === 'live')   return <span className="apf-badge apf-badge--live">LIVE</span>
-  if (status === 'ground') return <span className="apf-badge apf-badge--ground">TAXI</span>
-  if (status === 'recent') return <span className="apf-badge apf-badge--recent">REC</span>
+function ApfBadge({ liveStatus, schedStatus }) {
+  // Live position takes priority over schedule status
+  if (liveStatus === 'live')   return <span className="apf-badge apf-badge--live">LIVE</span>
+  if (liveStatus === 'ground') return <span className="apf-badge apf-badge--ground">TAXI</span>
+  if (liveStatus === 'recent') return <span className="apf-badge apf-badge--recent">REC</span>
+  // AeroAPI schedule status
+  if (schedStatus) {
+    const s = schedStatus.toLowerCase()
+    if (s.includes('cancel'))  return <span className="apf-badge apf-badge--cancel">CNCL</span>
+    if (s.includes('divert'))  return <span className="apf-badge apf-badge--cancel">DIVT</span>
+    if (s.includes('en route') || s.includes('enroute')) return <span className="apf-badge apf-badge--live">ENRT</span>
+    if (s.includes('land'))    return <span className="apf-badge apf-badge--recent">LND</span>
+  }
   return null
 }
 
@@ -173,91 +181,76 @@ function AirportFlightsTab({ ident, liveFlights, onFlightSelect }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [])
 
-  // Build a quick lookup: icao24 → live flight object
+  // Match live flights by callsign (works for both AeroAPI and OpenSky formats)
   const liveMap = useMemo(
-    () => new Map((liveFlights ?? []).map(f => [f.icao24, f])),
+    () => new Map((liveFlights ?? []).map(f => [(f.callsign || '').trim().toUpperCase(), f])),
     [liveFlights],
   )
 
-  const list = sub === 'dep' ? (data?.departures ?? []) : (data?.arrivals ?? [])
+  const list   = sub === 'dep' ? (data?.departures ?? []) : (data?.arrivals ?? [])
+  const isAero = data?.source === 'aeroapi'
   const nowSec = Date.now() / 1000
 
   return (
     <div className="apf-wrap">
       <div className="apf-subtabs">
-        <button
-          className={`apf-subtab${sub === 'dep' ? ' apf-subtab--active' : ''}`}
-          onClick={() => setSub('dep')}
-        >
+        <button className={`apf-subtab${sub === 'dep' ? ' apf-subtab--active' : ''}`} onClick={() => setSub('dep')}>
           Departures
         </button>
-        <button
-          className={`apf-subtab${sub === 'arr' ? ' apf-subtab--active' : ''}`}
-          onClick={() => setSub('arr')}
-        >
+        <button className={`apf-subtab${sub === 'arr' ? ' apf-subtab--active' : ''}`} onClick={() => setSub('arr')}>
           Arrivals
         </button>
       </div>
 
       {loading && <div className="apf-loading">Loading…</div>}
-
       {!loading && data && list.length === 0 && (
-        <div className="apf-empty">No data for the past 24 h</div>
+        <div className="apf-empty">No {sub === 'dep' ? 'departures' : 'arrivals'} found</div>
       )}
 
       {list.length > 0 && (
         <div className="apf-list">
           {list.map((fl, i) => {
-            const cs = fl.callsign?.trim() || fl.icao24 || '—'
-            // OpenSky's trajectory estimate is specific to this actual flight;
-            // adsbdb scheduled route is only a fallback for when OpenSky has nothing.
-            const partner = sub === 'dep'
-              ? (fl.estArrivalAirport ?? fl.routeArr)
-              : (fl.estDepartureAirport ?? fl.routeDep)
-            const ts      = sub === 'dep' ? tsHHMM(fl.firstSeen) : tsHHMM(fl.lastSeen)
-            const liveF        = liveMap.get(fl.icao24)
-            const firstSeenAge = nowSec - (fl.firstSeen ?? 0)
-            const lastSeenAge  = nowSec - (fl.lastSeen  ?? 0)
+            const cs        = fl.callsign?.trim() || '—'
+            const csUpper   = cs.toUpperCase()
+            const partner   = fl.partnerIata || fl.partner || '—'
+            const liveF     = liveMap.get(csUpper)
+            const refSec    = sub === 'dep' ? (fl.firstSeen ?? 0) : (fl.lastSeen ?? 0)
+            const ageOk     = nowSec - refSec < (sub === 'dep' ? 72_000 : 7_200)
 
-            // Guard against stale ICAO24 matches: the same aircraft can do several flights in 24 h.
-            // Departure is only "live" if it departed < 20 h ago AND the aircraft is still airborne.
-            // Arrival  is only "live" if last seen < 2 h ago (landed recently or still inbound).
-            let status, clickable
-            if (liveF) {
-              if (sub === 'dep') {
-                if (firstSeenAge < 72_000) {          // < 20 h — plausibly the same flight leg
-                  status    = liveF.onGround ? 'ground' : 'live'
-                  clickable = !liveF.onGround
-                } else {
-                  status = null; clickable = false     // too old — aircraft is on a different flight
-                }
-              } else {
-                if (lastSeenAge < 7_200) {            // < 2 h — still inbound or just arrived
-                  status    = liveF.onGround ? 'ground' : 'live'
-                  clickable = !liveF.onGround
-                } else {
-                  status = null; clickable = false
-                }
-              }
-            } else {
-              status    = (sub === 'dep' ? firstSeenAge : lastSeenAge) < 7_200 ? 'recent' : null
-              clickable = false
-            }
+            let liveStatus = null
+            if (liveF && ageOk) liveStatus = liveF.onGround ? 'ground' : 'live'
+            else if (!liveF && ageOk && refSec > 0) liveStatus = 'recent'
+
+            const clickable = liveStatus === 'live'
+
+            // Time display: show actual if different from scheduled, highlight delay
+            const timeStr   = fl.actualTime || fl.scheduledTime || '—'
+            const isDelayed = fl.delayMin != null && fl.delayMin > 0
 
             return (
               <div
                 key={i}
                 className={`apf-row${clickable ? ' apf-row--live' : ''}`}
                 onClick={clickable ? () => onFlightSelect?.(liveF) : undefined}
-                title={clickable ? 'Click to track this flight' : undefined}
+                title={clickable ? 'Click to track on map' : undefined}
               >
                 <span className="apf-cs">{cs}</span>
                 <span className="apf-route">
                   {sub === 'dep' ? '→ ' : '← '}
-                  <span className="apf-airport">{partner || '—'}</span>
+                  <span className="apf-airport">{partner}</span>
                 </span>
-                <span className="apf-time">{ts}</span>
-                <ApfBadge status={status} />
+                <span className={`apf-time${isDelayed ? ' apf-time--late' : ''}`}>
+                  {timeStr}
+                  {isDelayed && <span className="apf-delay">+{fl.delayMin}m</span>}
+                </span>
+                {isAero && (fl.gate || fl.terminal) && (
+                  <span className="apf-gate">
+                    {fl.terminal ? `T${fl.terminal}` : ''}
+                    {fl.terminal && fl.gate ? ' ' : ''}
+                    {fl.gate ? `G${fl.gate}` : ''}
+                  </span>
+                )}
+                <ApfBadge liveStatus={liveStatus} schedStatus={fl.status} />
               </div>
             )
           })}
