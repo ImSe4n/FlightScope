@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import requests
 from fastapi import APIRouter
+from api.aeroapi import get_flight as _aero_flight, format_route as _aero_route, format_status as _aero_status, configured as _aero_configured
 
 router = APIRouter()
 
@@ -417,7 +418,7 @@ _ROUTE_EP_TTL_MISS = 3_600   # 1 h for not-found (retry later)
 
 @router.get("/api/route/{callsign}")
 def get_route(callsign: str):
-    cs = callsign.strip().upper()
+    cs  = callsign.strip().upper()
     now = time.time()
 
     # Return cached result (hit or known miss) before hitting any external API
@@ -429,19 +430,26 @@ def get_route(callsign: str):
 
     result: dict = {}
 
-    # 1. OpenSky scheduled-route database
-    try:
-        r = requests.get(
-            f"https://opensky-network.org/api/routes?callsign={cs}",
-            timeout=6, headers=opensky.headers())
-        if r.ok:
-            d = r.json()
-            if d.get("route") and len(d["route"]) >= 2:
-                result = d
-    except Exception:
-        pass
+    # 1. AeroAPI — real flight data, most accurate (replaces adsbdb + OpenSky schedule DB)
+    if _aero_configured():
+        fl = _aero_flight(cs)
+        if fl:
+            result = _aero_route(fl)
 
-    # 2. adsbdb.com fallback
+    # 2. OpenSky scheduled-route database (fallback when AeroAPI not configured)
+    if not result:
+        try:
+            r = requests.get(
+                f"https://opensky-network.org/api/routes?callsign={cs}",
+                timeout=6, headers=opensky.headers())
+            if r.ok:
+                d = r.json()
+                if d.get("route") and len(d["route"]) >= 2:
+                    result = d
+        except Exception:
+            pass
+
+    # 3. adsbdb.com (fallback when AeroAPI not configured)
     if not result:
         try:
             r = requests.get(
