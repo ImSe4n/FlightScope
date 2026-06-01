@@ -608,48 +608,11 @@ def get_airport_flights(ident: str):
 
 @router.get("/api/flight-status/{callsign}")
 def get_flight_status(callsign: str):
-    """Gate/terminal/status from AeroDataBox — requires AERODATABOX_KEY in .env."""
-    if not AERODATABOX_KEY:
+    """Gate/terminal/scheduled+actual times from AeroAPI (personal plan)."""
+    if not _aero_configured():
         return {"error": "no_key"}
     cs = callsign.strip().upper()
-    try:
-        r = requests.get(
-            f"https://aerodatabox.p.rapidapi.com/flights/callsign/{cs}",
-            headers={
-                "X-RapidAPI-Key":  AERODATABOX_KEY,
-                "X-RapidAPI-Host": "aerodatabox.p.rapidapi.com",
-            },
-            timeout=8)
-        if not r.ok:
-            print(f"[aerodatabox] {cs}: HTTP {r.status_code}")
-            return {}
-        items = r.json()
-        if not isinstance(items, list):
-            items = [items]
-        if not items:
-            return {}
-        fl  = items[0]
-        dep = fl.get("departure") or {}
-        arr = fl.get("arrival")   or {}
-        return {
-            "status": fl.get("status"),
-            "number": fl.get("number"),
-            "departure": {
-                "airport":   (dep.get("airport") or {}).get("icao"),
-                "terminal":  dep.get("terminal"),
-                "gate":      dep.get("gate"),
-                "runway":    dep.get("runway"),
-                "scheduled": (dep.get("scheduledTime") or {}).get("local"),
-                "actual":    (dep.get("actualTime")    or {}).get("local"),
-            },
-            "arrival": {
-                "airport":   (arr.get("airport") or {}).get("icao"),
-                "terminal":  arr.get("terminal"),
-                "gate":      arr.get("gate"),
-                "scheduled": (arr.get("scheduledTime") or {}).get("local"),
-                "estimated": (arr.get("predictedTime") or {}).get("local"),
-            },
-        }
-    except Exception as exc:
-        print(f"[aerodatabox] {cs}: {exc}")
+    fl = _aero_flight(cs)
+    if not fl:
         return {}
+    return _aero_status(fl)
