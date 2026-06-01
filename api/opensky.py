@@ -23,7 +23,6 @@ FLIGHT_COLUMNS = [
     'vertRate', 'sensors', 'geoAlt', 'squawk', 'spi', 'source',
 ]
 
-AERODATABOX_KEY = os.getenv("AERODATABOX_KEY", "")
 
 # ── OAuth2 token manager ───────────────────────────────────────────────────────
 _TOKEN_URL = (
