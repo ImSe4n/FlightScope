@@ -82,6 +82,107 @@ def format_route(flight: dict) -> dict:
     }
 
 
+# ── Airport flights ────────────────────────────────────────────────────────────
+
+_apf_cache: dict = {}   # airport_ident -> (result, timestamp)
+_APF_TTL = 900          # 15 min — schedules don't change faster than this; 2 calls/airport
+
+
+def _iso_to_unix(iso: str | None) -> int | None:
+    if not iso:
+        return None
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        return int(dt.timestamp())
+    except Exception:
+        return None
+
+
+def _iso_to_hhmm(iso: str | None) -> str | None:
+    if not iso:
+        return None
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        return dt.strftime("%H:%M")
+    except Exception:
+        return None
+
+
+def _fmt_apf(f: dict, direction: str) -> dict:
+    if direction == "dep":
+        partner   = f.get("destination") or {}
+        sched_iso = f.get("scheduled_out")
+        act_iso   = f.get("actual_out") or f.get("estimated_out")
+        gate      = f.get("gate_origin")
+        terminal  = f.get("terminal_origin")
+    else:
+        partner   = f.get("origin") or {}
+        sched_iso = f.get("scheduled_on")
+        act_iso   = f.get("actual_on") or f.get("estimated_on")
+        gate      = f.get("gate_destination")
+        terminal  = f.get("terminal_destination")
+
+    sched_unix = _iso_to_unix(sched_iso)
+    act_unix   = _iso_to_unix(act_iso)
+    sched_hhmm = _iso_to_hhmm(sched_iso)
+    act_hhmm   = _iso_to_hhmm(act_iso)
+
+    # Compute delay in minutes (positive = late)
+    delay_min = None
+    if sched_unix and act_unix:
+        delay_min = round((act_unix - sched_unix) / 60)
+
+    return {
+        "callsign":      (f.get("ident") or "").strip(),
+        "partner":       partner.get("code"),
+        "partnerIata":   partner.get("code_iata"),
+        "scheduledTime": sched_hhmm,
+        "actualTime":    act_hhmm if act_hhmm != sched_hhmm else None,
+        "delayMin":      delay_min if delay_min and abs(delay_min) >= 5 else None,
+        "firstSeen":     sched_unix,
+        "lastSeen":      (act_unix or sched_unix),
+        "gate":          gate,
+        "terminal":      terminal,
+        "status":        f.get("status"),
+        "aircraft":      f.get("aircraft_type"),
+    }
+
+
+def get_airport_flights(ident: str) -> dict | None:
+    """Return departures + arrivals from AeroAPI. 2 calls/airport, cached 15 min."""
+    ap  = ident.strip().upper()
+    now = time.time()
+    if ap in _apf_cache:
+        cached, ts = _apf_cache[ap]
+        if now - ts < _APF_TTL:
+            return cached
+    if not AEROAPI_KEY:
+        return None
+
+    from datetime import datetime, timezone, timedelta
+    start = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%MZ")
+    end   = (datetime.now(timezone.utc) + timedelta(hours=6)).strftime("%Y-%m-%dT%H:%MZ")
+    params = {"start": start, "end": end, "max_pages": 1}
+
+    deps_raw = _get(f"/airports/{ap}/flights/scheduled_departures", params) or {}
+    arrs_raw = _get(f"/airports/{ap}/flights/scheduled_arrivals",   params) or {}
+
+    deps = [_fmt_apf(f, "dep") for f in (deps_raw.get("departures") or deps_raw.get("scheduled_departures") or [])]
+    arrs = [_fmt_apf(f, "arr") for f in (arrs_raw.get("arrivals")   or arrs_raw.get("scheduled_arrivals")   or [])]
+
+    if not deps and not arrs:
+        _apf_cache[ap] = (None, now)
+        print(f"[aeroapi] airport-flights {ap} → no data")
+        return None
+
+    result = {"departures": deps[:40], "arrivals": arrs[:40], "source": "aeroapi"}
+    _apf_cache[ap] = (result, now)
+    print(f"[aeroapi] airport-flights {ap} → {len(deps)} deps, {len(arrs)} arrs")
+    return result
+
+
 def format_status(flight: dict) -> dict:
     """Convert AeroAPI flight record → /api/flight-status/ compatible response."""
     return {
