@@ -1184,6 +1184,12 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
   font-family: var(--mono); font-size: 10px; color: var(--txt-3);
   text-align: right; white-space: nowrap;
 }
+.apf-time--late { color: var(--red); }
+.apf-delay { font-size: 9px; margin-left: 2px; color: var(--red); }
+.apf-gate {
+  font-size: 9px; color: var(--txt-3); font-family: var(--mono);
+  white-space: nowrap; text-align: right;
+}
 
 /* Flight status badges in airport popup */
 .apf-badge {
