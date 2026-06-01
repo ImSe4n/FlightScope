@@ -556,9 +556,41 @@ _apf_cache: dict = {}     # ident -> (result, timestamp)
 _APF_CACHE_TTL = 600
 
 
+def _opensky_flight_to_apf(f: dict, direction: str) -> dict:
+    """Convert OpenSky flight record to the unified airport-flights format."""
+    import time as _time
+    now = _time.time()
+    if direction == "dep":
+        partner  = f.get("estArrivalAirport")   or f.get("routeArr")
+        ts       = f.get("firstSeen")
+    else:
+        partner  = f.get("estDepartureAirport") or f.get("routeDep")
+        ts       = f.get("lastSeen")
+
+    hhmm = None
+    if ts:
+        from datetime import datetime, timezone
+        hhmm = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M")
+
+    return {
+        "callsign":      (f.get("callsign") or "").strip(),
+        "partner":       partner,
+        "partnerIata":   None,
+        "scheduledTime": hhmm,
+        "actualTime":    None,
+        "delayMin":      None,
+        "firstSeen":     f.get("firstSeen"),
+        "lastSeen":      f.get("lastSeen"),
+        "gate":          None,
+        "terminal":      None,
+        "status":        None,
+        "aircraft":      None,
+    }
+
+
 @router.get("/api/airport-flights/{ident}")
 def get_airport_flights(ident: str):
-    """Departures + arrivals for an airport over the past 24 h."""
+    """Departures + arrivals — AeroAPI when configured, OpenSky otherwise."""
     ident = ident.upper()
     now   = time.time()
 
@@ -567,6 +599,14 @@ def get_airport_flights(ident: str):
         if now - ts < _APF_CACHE_TTL:
             return cached
 
+    # ── Try AeroAPI first (scheduled times, gates, terminals, status) ──────────
+    if _aero_configured():
+        result = _aero_airport_flights(ident)
+        if result:
+            _apf_cache[ident] = (result, now)
+            return result
+
+    # ── Fall back to OpenSky (past 24 h of actual flight records) ──────────────
     end   = int(now)
     begin = end - 86_400
 
@@ -587,26 +627,27 @@ def get_airport_flights(ident: str):
         deps_raw = ex.submit(_fetch, "departure").result() or []
         arrs_raw = ex.submit(_fetch, "arrival").result()   or []
 
-    deps = sorted(deps_raw, key=lambda x: x.get("firstSeen", 0), reverse=True)[:60]
-    arrs = sorted(arrs_raw, key=lambda x: x.get("lastSeen",  0), reverse=True)[:60]
+    deps_sorted = sorted(deps_raw, key=lambda x: x.get("firstSeen", 0), reverse=True)[:40]
+    arrs_sorted = sorted(arrs_raw, key=lambda x: x.get("lastSeen",  0), reverse=True)[:40]
 
-    # Only call adsbdb for flights where OpenSky has no trajectory estimate.
-    # OpenSky's est*Airport is specific to the actual flight; adsbdb is a scheduled-route
-    # lookup that can map a callsign to a completely different city pair on different days.
-    deps_no_arr = [f for f in deps if not f["estArrivalAirport"]]
-    arrs_no_dep = [f for f in arrs if not f["estDepartureAirport"]]
-    top_flights = deps_no_arr[:20] + arrs_no_dep[:20]
-    unique_cs   = list({f["callsign"] for f in top_flights if f["callsign"]})
+    # Enrich with adsbdb routes where OpenSky has no estimate
+    deps_no_arr = [f for f in deps_sorted if not f["estArrivalAirport"]]
+    arrs_no_dep = [f for f in arrs_sorted if not f["estDepartureAirport"]]
+    unique_cs   = list({f["callsign"] for f in deps_no_arr[:20] + arrs_no_dep[:20] if f["callsign"]})
     if unique_cs:
         with ThreadPoolExecutor(max_workers=min(len(unique_cs), 20)) as ex:
             route_pairs = list(ex.map(_lookup_route, unique_cs))
         route_map = {cs: rt for cs, rt in zip(unique_cs, route_pairs) if rt}
-        for f in deps + arrs:
+        for f in deps_sorted + arrs_sorted:
             rt = route_map.get(f["callsign"])
             if rt:
                 f["routeDep"], f["routeArr"] = rt
 
-    result = {"departures": deps, "arrivals": arrs}
+    result = {
+        "departures": [_opensky_flight_to_apf(f, "dep") for f in deps_sorted],
+        "arrivals":   [_opensky_flight_to_apf(f, "arr") for f in arrs_sorted],
+        "source":     "opensky",
+    }
     _apf_cache[ident] = (result, now)
     return result
 
