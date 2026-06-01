@@ -15,8 +15,10 @@ import requests
 
 AEROAPI_KEY = os.getenv("AEROAPI_KEY", "")
 _BASE       = "https://aeroapi.flightaware.com/aeroapi"
-_TTL_HIT    = 120     # 2 min — status/gate changes during flight
-_TTL_MISS   = 3_600   # 1 h  — unknown callsigns unlikely to appear soon
+# Personal plan: ~$0.005–0.01/call, $5 free/month ≈ 500–1000 calls.
+# Keep TTLs long so repeated lookups of the same flight are free.
+_TTL_HIT    = 600     # 10 min — gate/delay rarely changes faster than this
+_TTL_MISS   = 3_600   # 1 h   — unknown callsigns unlikely to appear soon
 
 _cache: dict = {}   # callsign -> (result | None, timestamp)
 
