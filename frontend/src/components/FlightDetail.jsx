@@ -192,19 +192,11 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
     return Math.round(R * 2 * Math.asin(Math.sqrt(a)) * 0.539957)
   })()
 
-  // Prefer AeroDataBox times when available (more precise)
+  // AeroAPI times — if AeroAPI doesn't have the flight, show nothing (no speed-based estimates)
   const depTime  = flightStatus?.departure?.actual   ?? flightStatus?.departure?.scheduled   ?? null
   const arrTime  = flightStatus?.arrival?.estimated  ?? flightStatus?.arrival?.scheduled     ?? null
   const depTimeDisplay = flightStatus ? fmtIso(depTime) : (latest?.firstSeen ? hhmm(latest.firstSeen) : null)
-  // Fallback ETA: compute from current speed + distance when AeroDataBox unavailable
-  const computedEta = (() => {
-    if (flightStatus || f.onGround) return null
-    const speedKts = f.speed != null ? f.speed * 1.94384 : 0
-    if (speedKts < 50 || distNm == null || distNm <= 0) return null
-    return new Date(Date.now() + distNm / speedKts * 3_600_000)
-      .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })
-  })()
-  const arrTimeDisplay = flightStatus ? fmtIso(arrTime) : computedEta
+  const arrTimeDisplay = fmtIso(arrTime)  // null when AeroAPI hasn't loaded yet
 
   // Distance-based flight progress (accurate even when ETA is stale)
   const [progressPct, progressElapsed, progressRemaining] = useMemo(() => {
