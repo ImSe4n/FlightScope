@@ -582,8 +582,6 @@ _APF_CACHE_TTL = 600
 
 def _opensky_flight_to_apf(f: dict, direction: str) -> dict:
     """Convert OpenSky flight record to the unified airport-flights format."""
-    import time as _time
-    now = _time.time()
     if direction == "dep":
         partner  = f.get("estArrivalAirport")   or f.get("routeArr")
         ts       = f.get("firstSeen")
