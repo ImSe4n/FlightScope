@@ -79,8 +79,8 @@ opensky = TokenManager()
 
 # ── Flight cache (stale-while-revalidate) ─────────────────────────────────────
 _flight_cache      = None   # last successful response dict
-_flight_cache_ts   = 0.0
-_flight_backoff_ts = 0.0
+_flight_cache_   = 0.0
+_flight_backoff_ = 0.0
 
 FLIGHT_CACHE_TTL = 90    # seconds — keeps OpenSky anonymous call rate under limit
 FLIGHT_BACKOFF   = 120   # seconds to wait after a total failure
@@ -188,15 +188,15 @@ def _fetch_global_adsb() -> list | None:
 
 # Cache of icao24 -> acType from airplanes.live — refreshed in background
 _type_cache: dict[str, str] = {}
-_type_cache_ts = 0.0
+_type_cache_ = 0.0
 _TYPE_CACHE_TTL = 180   # seconds
 
 
 def _refresh_type_cache():
     """Grab type codes from two high-traffic airplanes.live tiles, cache them."""
-    global _type_cache, _type_cache_ts
+    global _type_cache, _type_cache_
     now = time.time()
-    if now - _type_cache_ts < _TYPE_CACHE_TTL:
+    if now - _type_cache_ < _TYPE_CACHE_TTL:
         return
 
     tiles = [(45, -95), (50, 15)]   # NA + Europe
@@ -212,7 +212,7 @@ def _refresh_type_cache():
 
     if new_map:
         _type_cache.update(new_map)
-        _type_cache_ts = now
+        _type_cache_ = now
         print(f"[types] {len(new_map)} type codes cached from airplanes.live")
 
 
@@ -286,7 +286,7 @@ def search_by_route(dep: str = "", arr: str = ""):
 
         # 1. Check /api/route/ endpoint cache (has AeroAPI + adsbdb results)
         if cs in _route_ep_cache:
-            ep_data, _ts = _route_ep_cache[cs]
+            ep_data, _ = _route_ep_cache[cs]
             if ep_data and isinstance(ep_data, dict):
                 r = ep_data.get("route", [])
                 if len(r) >= 2 and _airport_matches(r[0], from_code) and _airport_matches(r[-1], to_code):
@@ -295,7 +295,7 @@ def search_by_route(dep: str = "", arr: str = ""):
 
         # 2. Check raw AeroAPI cache (flight already fetched for status/route)
         if cs in _aero_cache:
-            fl, _ts = _aero_cache[cs]
+            fl, _ = _aero_cache[cs]
             if fl:
                 dep_c = (fl.get("origin")      or {}).get("code")
                 arr_c = (fl.get("destination") or {}).get("code")
@@ -329,17 +329,17 @@ def search_by_route(dep: str = "", arr: str = ""):
 @router.get("/api/flights")
 def get_flights():
     """Live aircraft positions — OpenSky primary, adsb.fi fallback."""
-    global _flight_cache, _flight_cache_ts, _flight_backoff_ts
+    global _flight_cache, _flight_cache_, _flight_backoff_
     now = time.time()
 
-    if _flight_cache is not None and now - _flight_cache_ts < FLIGHT_CACHE_TTL:
+    if _flight_cache is not None and now - _flight_cache_ < FLIGHT_CACHE_TTL:
         return _flight_cache
 
     # Kick off type-code refresh in the background — never blocks this request
     threading.Thread(target=_refresh_type_cache, daemon=True).start()
 
     # Primary: OpenSky — large global dataset
-    if now >= _flight_backoff_ts:
+    if now >= _flight_backoff_:
         try:
             r = requests.get(
                 "https://opensky-network.org/api/states/all",
@@ -352,7 +352,7 @@ def get_flights():
                     timeout=15, headers=opensky.headers())
                 print(f"[flights] opensky retry: HTTP {r.status_code}")
             if r.status_code == 429:
-                _flight_backoff_ts = now + FLIGHT_BACKOFF
+                _flight_backoff_ = now + FLIGHT_BACKOFF
             elif r.ok:
                 clean = _opensky_clean(r.json())
                 if clean:
@@ -370,7 +370,7 @@ def get_flights():
                         "timestamp": datetime.now().isoformat(),
                     }
                     _flight_cache    = result
-                    _flight_cache_ts = now
+                    _flight_cache_ = now
                     return result
         except Exception as exc:
             print(f"[flights] opensky exception: {exc}")
@@ -386,7 +386,7 @@ def get_flights():
                 "timestamp": datetime.now().isoformat(),
             }
             _flight_cache    = result
-            _flight_cache_ts = now
+            _flight_cache_ = now
             return result
     except Exception as exc:
         print(f"[flights] adsb.fi exception: {exc}")
