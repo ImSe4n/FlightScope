@@ -1676,6 +1676,13 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 .ai-send:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ── Auth button ──────────────────────────────────────────────────────────── */
+.auth-signin-wrap { display: flex; align-items: center; gap: 6px; }
+.auth-error-badge {
+  font-size: 10px; color: var(--red); background: rgba(248,113,113,0.12);
+  border: 1px solid rgba(248,113,113,0.3); border-radius: var(--r);
+  padding: 2px 6px; max-width: 160px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; cursor: default;
+}
 .auth-btn {
   height: 30px; padding: 0 12px; border-radius: var(--r);
   border: 1px solid var(--border-h); background: var(--panel-3);
