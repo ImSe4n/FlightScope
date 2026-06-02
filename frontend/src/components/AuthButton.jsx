@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAppAuth } from '../context/AuthContext'
 
 export default function AuthButton({ onOpenPanel }) {
-  const { isAuthenticated, isLoading, user, login, logout } = useAppAuth()
+  const { isAuthenticated, isLoading, user, login, logout, authError } = useAppAuth()
   const [open, setOpen] = useState(false)
 
   if (isLoading) {
@@ -11,9 +11,16 @@ export default function AuthButton({ onOpenPanel }) {
 
   if (!isAuthenticated) {
     return (
-      <button className="auth-btn auth-btn--signin" onClick={() => login()}>
-        Sign in
-      </button>
+      <div className="auth-signin-wrap">
+        {authError && (
+          <span className="auth-error-badge" title={authError.message}>
+            ⚠ {authError.message?.replace(/\(.*?\)/g, '').trim() || 'Login error'}
+          </span>
+        )}
+        <button className="auth-btn auth-btn--signin" onClick={() => login()}>
+          Sign in
+        </button>
+      </div>
     )
   }
 
