@@ -435,30 +435,31 @@ def get_route(callsign: str):
 
     result: dict = {}
 
-    # 1. adsbdb — static schedule database, very fast (sub-second), free, no rate limit
-    try:
-        r = requests.get(
-            f"https://api.adsbdb.com/v0/callsign/{cs}",
-            timeout=4, headers={"User-Agent": "FlightScope/1.0"})
-        if r.ok:
-            fr  = r.json().get("response", {}).get("flightroute") or {}
-            dep = (fr.get("origin")      or {}).get("icao_code")
-            arr = (fr.get("destination") or {}).get("icao_code")
-            if dep and arr:
-                result = {
-                    "callsign":     cs,
-                    "route":        [dep, arr],
-                    "operatorCode": (fr.get("airline") or {}).get("icao"),
-                    "flightNumber": cs,
-                }
-    except Exception:
-        pass
-
-    # 2. AeroAPI — real flight data for this specific flight (fallback when adsbdb misses)
-    if not result and _aero_configured():
+    # 1. AeroAPI — real flight data for this specific departure (most accurate)
+    if _aero_configured():
         fl = _aero_flight(cs)
         if fl:
             result = _aero_route(fl)
+
+    # 2. adsbdb — static schedule database (fallback when AeroAPI misses)
+    if not result:
+        try:
+            r = requests.get(
+                f"https://api.adsbdb.com/v0/callsign/{cs}",
+                timeout=4, headers={"User-Agent": "FlightScope/1.0"})
+            if r.ok:
+                fr  = r.json().get("response", {}).get("flightroute") or {}
+                dep = (fr.get("origin")      or {}).get("icao_code")
+                arr = (fr.get("destination") or {}).get("icao_code")
+                if dep and arr:
+                    result = {
+                        "callsign":     cs,
+                        "route":        [dep, arr],
+                        "operatorCode": (fr.get("airline") or {}).get("icao"),
+                        "flightNumber": cs,
+                    }
+        except Exception:
+            pass
 
     # 3. OpenSky scheduled-route database (last resort)
     if not result:
