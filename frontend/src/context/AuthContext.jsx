@@ -6,6 +6,7 @@ const AuthContext = createContext({
   isAuthenticated: false,
   isLoading:       false,
   user:            null,
+  authError:       null,
   login:           () => {},
   logout:          () => {},
   getToken:        async () => { throw new Error('Auth not configured') },
