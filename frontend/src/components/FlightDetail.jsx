@@ -221,15 +221,18 @@ export default function FlightDetail({ flight: f, onClose, airports, track, onAi
       catch { /* ignore */ }
     }
 
-    // Remaining from current speed + distance (live, not from stale ETA)
+    // Remaining: use AeroAPI estimated arrival for accuracy (not speed-based)
     let remaining = null
-    const speedKts = f.speed != null ? f.speed * 1.94384 : 0
-    if (speedKts > 50 && distNm > 0) {
-      remaining = fmtDur(distNm / speedKts * 3_600_000)
+    const arrEstStr = flightStatus?.arrival?.estimated ?? flightStatus?.arrival?.scheduled
+    if (arrEstStr) {
+      try {
+        const msLeft = new Date(arrEstStr.replace(' ', 'T')).getTime() - Date.now()
+        if (msLeft > 0) remaining = fmtDur(msLeft)
+      } catch { /* ignore */ }
     }
 
     return [pct, elapsed, remaining]
-  }, [fromInfo, toInfo, distNm, f.lat, f.speed, flightStatus])
+  }, [fromInfo, toInfo, distNm, f.lat, flightStatus])
 
   return (
     <div className="flight-detail">
