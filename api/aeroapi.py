@@ -11,6 +11,7 @@ Add AEROAPI_KEY to your .env file.
 """
 import os
 import time
+import threading
 import requests
 
 AEROAPI_KEY = os.getenv("AEROAPI_KEY", "")
@@ -20,18 +21,36 @@ _BASE       = "https://aeroapi.flightaware.com/aeroapi"
 _TTL_HIT    = 600     # 10 min — gate/delay rarely changes faster than this
 _TTL_MISS   = 3_600   # 1 h   — unknown callsigns unlikely to appear soon
 
-_cache: dict = {}   # callsign -> (result | None, timestamp)
+_cache: dict    = {}   # callsign -> (result | None, timestamp)
+_inflight: dict = {}   # callsign -> threading.Event (dedup concurrent requests)
+_lock = threading.Lock()
 
 
 def _lookup(callsign: str) -> dict | None:
-    """Fetch /flights/{ident} and return the most recent flight record."""
+    """Fetch /flights/{ident}, deduplicating concurrent calls for the same callsign."""
     if not AEROAPI_KEY:
         return None
+
+    # If another thread is already fetching this callsign, wait for it and reuse its result
+    with _lock:
+        if callsign in _inflight:
+            ev = _inflight[callsign]
+        else:
+            ev = threading.Event()
+            _inflight[callsign] = ev
+            ev = None  # signal: we are the fetcher
+
+    if ev is not None:  # waiter path
+        ev.wait(timeout=6)
+        cached = _cache.get(callsign)
+        return cached[0] if cached else None
+
+    # Fetcher path
     try:
         r = requests.get(
             f"{_BASE}/flights/{callsign}",
             headers={"x-apikey": AEROAPI_KEY, "Accept": "application/json"},
-            timeout=8,
+            timeout=5,
         )
         if r.status_code == 429:
             print(f"[aeroapi] rate limited — {callsign}")
@@ -46,6 +65,11 @@ def _lookup(callsign: str) -> dict | None:
     except Exception as exc:
         print(f"[aeroapi] {callsign} → {exc}")
         return None
+    finally:
+        with _lock:
+            ev = _inflight.pop(callsign, None)
+        if ev:
+            ev.set()
 
 
 def get_flight(callsign: str) -> dict | None:
