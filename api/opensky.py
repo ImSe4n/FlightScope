@@ -273,6 +273,8 @@ def search_by_route(dep: str = "", arr: str = ""):
     if not cache:
         return {"icao24s": [], "from": from_code, "to": to_code}
 
+    from api.aeroapi import _cache as _aero_cache  # noqa: PLC0415
+
     matching: list[str] = []
     uncached: list[tuple[str, str]] = []   # (callsign, icao24)
 
@@ -281,6 +283,27 @@ def search_by_route(dep: str = "", arr: str = ""):
         if not cs:
             continue
         icao24 = f.get("icao24", "")
+
+        # 1. Check /api/route/ endpoint cache (has AeroAPI + adsbdb results)
+        if cs in _route_ep_cache:
+            ep_data, _ts = _route_ep_cache[cs]
+            if ep_data and isinstance(ep_data, dict):
+                r = ep_data.get("route", [])
+                if len(r) >= 2 and _airport_matches(r[0], from_code) and _airport_matches(r[-1], to_code):
+                    matching.append(icao24)
+            continue  # handled (hit or known miss)
+
+        # 2. Check raw AeroAPI cache (flight already fetched for status/route)
+        if cs in _aero_cache:
+            fl, _ts = _aero_cache[cs]
+            if fl:
+                dep_c = (fl.get("origin")      or {}).get("code")
+                arr_c = (fl.get("destination") or {}).get("code")
+                if _airport_matches(dep_c, from_code) and _airport_matches(arr_c, to_code):
+                    matching.append(icao24)
+            continue  # handled
+
+        # 3. Check adsbdb route cache (from previous batch lookups)
         if cs in _route_cache:
             c_dep, c_arr, _ = _route_cache[cs]
             if _airport_matches(c_dep, from_code) and _airport_matches(c_arr, to_code):
@@ -288,12 +311,12 @@ def search_by_route(dep: str = "", arr: str = ""):
         else:
             uncached.append((cs, icao24))
 
-    # Batch-lookup uncached callsigns (rate-limited; first call may take a few seconds)
+    # Batch-lookup uncached callsigns via adsbdb (parallel, 4s timeout each)
     if uncached:
-        batch   = uncached[:50]
+        batch   = uncached[:100]
         cs_list = [cs for cs, _ in batch]
         id_map  = {cs: icao24 for cs, icao24 in batch}
-        with ThreadPoolExecutor(max_workers=10) as ex:
+        with ThreadPoolExecutor(max_workers=15) as ex:
             results = list(ex.map(_lookup_route, cs_list))
         for cs, rt in zip(cs_list, results):
             if rt and _airport_matches(rt[0], from_code) and _airport_matches(rt[1], to_code):
